@@ -357,3 +357,38 @@ pre  { font-family: "SF Mono", "Menlo", monospace; font-size: 11px; background: 
   background: rgba(255,255,255,0.08); padding: 1px 5px; border-radius: 3px;
   font-size: 10px; font-family: inherit;
 }
+
+/* ------------------------ Shared-state view ------------------------ */
+
+.shared-node {
+  width: 240px; height: 72px;
+  background: var(--panel);
+  border: 1.5px solid var(--accent);
+  border-radius: 10px;
+  padding: 0 14px;
+  display: flex; align-items: center;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+  cursor: pointer;
+  transition: opacity 0.12s ease, filter 0.12s ease, box-shadow 0.15s;
+}
+.shared-node.is-selected {
+  box-shadow: 0 0 0 3px var(--accent), 0 4px 16px rgba(0,0,0,0.6);
+}
+.react-flow__node.is-faded .shared-node { opacity: 0.2; filter: saturate(0.4); }
+.react-flow__node.is-faded .shared-node:hover { opacity: 0.9; filter: none; }
+
+.sn-inner { display: flex; align-items: center; gap: 10px; width: 100%; }
+.sn-kind {
+  font-size: 10px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.5px; padding: 2px 8px; border-radius: 10px;
+}
+.sn-key {
+  flex: 1; font-family: "SF Mono", "Menlo", monospace;
+  font-size: 13px; font-weight: 600;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.sn-count {
+  font-size: 11px; font-weight: 600; color: var(--muted);
+  min-width: 22px; text-align: center;
+  background: rgba(255,255,255,0.06); padding: 2px 8px; border-radius: 10px;
+}
