@@ -1,5 +1,6 @@
 import type { EdgeKind, Graph, SharedStorageKind } from "../types";
 import { moduleStyle, storageKindStyle } from "../layout";
+import { Legend } from "./Legend";
 
 export type ViewMode = "reducers" | "shared";
 
@@ -178,6 +179,8 @@ export function Sidebar({
           })}
         </ul>
       </section>
+
+      <Legend mode={mode} />
     </aside>
   );
 }
