@@ -1,0 +1,63 @@
+import ComposableArchitecture
+
+@Reducer
+public struct Child {
+  @ObservableState
+  public struct State: Equatable {
+    var value: Int = 0
+  }
+
+  public enum Action: Equatable {
+    case tick
+  }
+
+  public var body: some Reducer<State, Action> {
+    Reduce { state, action in .none }
+  }
+}
+
+@Reducer
+public struct Parent {
+  @Dependency(\.uuid) var uuid
+
+  @ObservableState
+  public struct State: Equatable {
+    var always: Child.State = Child.State()
+    var optional: Child.State?
+    @Presents var presented: Child.State?
+    var list: IdentifiedArrayOf<Child.State> = []
+  }
+
+  public enum Action: BindableAction {
+    case binding(BindingAction<State>)
+    case always(Child.Action)
+    case optional(Child.Action)
+    case presented(PresentationAction<Child.Action>)
+    case list(IdentifiedActionOf<Child>)
+  }
+
+  public var body: some Reducer<State, Action> {
+    BindingReducer()
+
+    Scope(state: \.always, action: \.always) {
+      Child()
+    }
+
+    Reduce { state, action in .none }
+      .ifLet(\.optional, action: \.optional) {
+        Child()
+      }
+      .ifLet(\.$presented, action: \.presented) {
+        Child()
+      }
+      .forEach(\.list, action: \.list) {
+        Child()
+      }
+  }
+}
+
+@Reducer
+public enum Destination {
+  case first(Child)
+  case second(Parent)
+}

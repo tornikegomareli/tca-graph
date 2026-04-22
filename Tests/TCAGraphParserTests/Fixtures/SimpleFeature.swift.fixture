@@ -1,0 +1,40 @@
+import ComposableArchitecture
+
+@Reducer
+public struct Counter {
+  @Dependency(\.uuid) var uuid
+  @Dependency(\.apiClient) var apiClient
+
+  @ObservableState
+  public struct State: Equatable {
+    var count: Int = 0
+    var title: String = ""
+    @Presents var sheet: Child.State?
+    var items: [Item] = []
+    var child: Child.State?
+  }
+
+  public enum Action: BindableAction, ViewAction {
+    case binding(BindingAction<State>)
+    case view(View)
+    case delegate(Delegate)
+    case sheet(PresentationAction<Child.Action>)
+    case child(Child.Action)
+
+    public enum View: Equatable {
+      case onAppear
+      case didTapIncrement
+    }
+
+    public enum Delegate: Equatable {
+      case finished
+    }
+  }
+
+  public var body: some Reducer<State, Action> {
+    BindingReducer()
+    Reduce { state, action in
+      return .none
+    }
+  }
+}
