@@ -84,6 +84,25 @@ function GraphView({ graph }: { graph: Graph }) {
     [graph.sharedStorages]
   );
 
+  // Reducer-composition edges under the current reducer-view filters. The details drawer
+  // always uses these for its Parents / Children lists, even when the drawer is opened
+  // from a reducer click while we're in shared mode — in that case `baseLaid.filtered.edges`
+  // would contain synthetic storage→reducer edges, which are meaningless in the reducer
+  // drawer.
+  const reducerVisibleNodeIds = useMemo(
+    () => new Set(graph.nodes.filter((n) => selectedModules.has(n.moduleId)).map((n) => n.id)),
+    [graph.nodes, selectedModules]
+  );
+  const reducerFilteredEdges = useMemo(
+    () => graph.edges.filter(
+      (e) =>
+        reducerVisibleNodeIds.has(e.sourceId) &&
+        reducerVisibleNodeIds.has(e.targetId) &&
+        selectedKinds.has(e.kind)
+    ),
+    [graph.edges, reducerVisibleNodeIds, selectedKinds]
+  );
+
   // Pass 1: dagre runs only when graph or structural filters change.
   const baseLaid = useMemo(
     () => {
@@ -284,7 +303,7 @@ function GraphView({ graph }: { graph: Graph }) {
       {selectedNode && (
         <DetailsDrawer
           graph={graph}
-          filteredEdges={baseLaid.filtered.edges}
+          filteredEdges={reducerFilteredEdges}
           node={selectedNode}
           onClose={() => setSelectedId(null)}
           onNavigateTo={focusNode}
