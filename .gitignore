@@ -1,0 +1,17 @@
+# Swift / SPM
+.build/
+.swiftpm/
+Package.pins
+*.xcodeproj
+*.xcworkspace/xcuserdata/
+
+# Node / Vite
+viewer/node_modules/
+viewer/dist/
+viewer/public/graph.json
+
+# macOS
+.DS_Store
+
+# Logs
+*.log
