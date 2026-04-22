@@ -6,6 +6,7 @@ import TCAGraphModel
 public struct IndexResult {
   public var nodes: [Node]
   public var edges: [Edge]
+  public var sharedStorages: [SharedStorage]
   public var diagnostics: [Diagnostic]
 }
 
@@ -82,7 +83,109 @@ public enum DeclarationIndexer {
     )
     diagnostics.append(contentsOf: resolveDiagnostics)
 
-    return IndexResult(nodes: nodes, edges: edges, diagnostics: diagnostics)
+    let sharedStorages = aggregateSharedStorages(nodes: nodes)
+
+    return IndexResult(
+      nodes: nodes,
+      edges: edges,
+      sharedStorages: sharedStorages,
+      diagnostics: diagnostics
+    )
+  }
+
+  // MARK: - @Shared aggregation
+
+  /// Walks every reducer's State fields, picks out `@Shared` fields, classifies each
+  /// storage descriptor into a canonical (kind, key) pair, and aggregates references
+  /// across reducers so one `.appStorage("x")` shared between three reducers becomes
+  /// a single SharedStorage with three `referencedBy` entries.
+  static func aggregateSharedStorages(nodes: [Node]) -> [SharedStorage] {
+    struct Acc {
+      let id: String
+      let kind: SharedStorage.Kind
+      let key: String
+      let rawDescriptor: String
+      var refs: [SharedStorage.Reference] = []
+    }
+
+    var byID: [String: Acc] = [:]
+    var order: [String] = []
+
+    for node in nodes {
+      guard let state = node.state else { continue }
+      for field in state.fields where field.kind == .shared {
+        guard let raw = field.storage, !raw.isEmpty else { continue }
+        let (kind, key) = classifyStorage(raw)
+        let id = "shared:\(kind.rawValue):\(key)"
+        let reference = SharedStorage.Reference(nodeId: node.id, fieldName: field.name)
+        if byID[id] == nil {
+          byID[id] = Acc(id: id, kind: kind, key: key, rawDescriptor: raw, refs: [reference])
+          order.append(id)
+        } else {
+          byID[id]?.refs.append(reference)
+        }
+      }
+    }
+
+    return order.compactMap { id in
+      guard let a = byID[id] else { return nil }
+      return SharedStorage(
+        id: a.id,
+        kind: a.kind,
+        key: a.key,
+        rawDescriptor: a.rawDescriptor,
+        referencedBy: a.refs
+      )
+    }
+  }
+
+  /// Extracts the storage kind and a best-effort human-readable key from a `@Shared`
+  /// descriptor string like `.appStorage("user_referral")` or
+  /// `.fileStorage(.documentsDirectory.appending(component: "updateInfo.json"))`.
+  /// Works purely on the trimmed source text — no AST needed.
+  static func classifyStorage(_ raw: String) -> (kind: SharedStorage.Kind, key: String) {
+    let trimmed = raw.trimmingCharacters(in: .whitespaces)
+    let descriptor = trimmed.hasPrefix(".") ? String(trimmed.dropFirst()) : trimmed
+
+    guard let parenIdx = descriptor.firstIndex(of: "(") else {
+      return (.other, trimmed)
+    }
+    let factory = String(descriptor[descriptor.startIndex..<parenIdx])
+
+    // Only treat as factory call if the descriptor ends with a matching ")".
+    guard descriptor.hasSuffix(")") else { return (.other, trimmed) }
+    let argsStart = descriptor.index(after: parenIdx)
+    let argsEnd = descriptor.index(before: descriptor.endIndex)
+    let args = String(descriptor[argsStart..<argsEnd])
+
+    switch factory {
+    case "appStorage":
+      return (.appStorage, firstStringLiteral(in: args) ?? args)
+    case "inMemory":
+      return (.inMemory, firstStringLiteral(in: args) ?? args)
+    case "fileStorage":
+      // Prefer the trailing `.appending(component: "X")` literal.
+      if let name = literalAfter(needle: "component:", in: args) {
+        return (.fileStorage, name)
+      }
+      return (.fileStorage, firstStringLiteral(in: args) ?? args)
+    default:
+      return (.other, trimmed)
+    }
+  }
+
+  /// Extracts the contents of the first `"..."` literal found in `s`.
+  private static func firstStringLiteral(in s: String) -> String? {
+    guard let openQuote = s.firstIndex(of: "\"") else { return nil }
+    let afterOpen = s.index(after: openQuote)
+    guard let closeQuote = s[afterOpen...].firstIndex(of: "\"") else { return nil }
+    return String(s[afterOpen..<closeQuote])
+  }
+
+  /// Finds `needle` in `s` and returns the first string literal appearing after it.
+  private static func literalAfter(needle: String, in s: String) -> String? {
+    guard let range = s.range(of: needle) else { return nil }
+    return firstStringLiteral(in: String(s[range.upperBound...]))
   }
 
   private static func mergeExtensions(
