@@ -114,8 +114,13 @@ function GraphView({ graph }: { graph: Graph }) {
     [baseLaid, focusIds, selectedId]
   );
 
-  // Reset selection when switching modes so stale IDs from the other view don't linger.
-  useEffect(() => {
+  // Manual mode toggle: clear selection so a stale id from the other view doesn't linger.
+  // Importantly, this runs only on user-initiated toggle, NOT as a side-effect of mode
+  // changes — otherwise `focusNode` (which flips mode to navigate from the shared drawer
+  // to a reducer) would race with the reset and land with nothing selected.
+  const toggleMode = useCallback((next: ViewMode) => {
+    if (next === mode) return;
+    setMode(next);
     setSelectedId(null);
     setHoveredId(null);
   }, [mode]);
@@ -227,14 +232,14 @@ function GraphView({ graph }: { graph: Graph }) {
           <button
             role="tab"
             className={mode === "reducers" ? "is-active" : ""}
-            onClick={() => setMode("reducers")}
+            onClick={() => toggleMode("reducers")}
           >
             Reducers
           </button>
           <button
             role="tab"
             className={mode === "shared" ? "is-active" : ""}
-            onClick={() => setMode("shared")}
+            onClick={() => toggleMode("shared")}
           >
             Shared state
             {graph.sharedStorages && graph.sharedStorages.length > 0 && (
