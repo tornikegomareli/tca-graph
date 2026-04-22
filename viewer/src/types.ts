@@ -85,6 +85,21 @@ export interface Diagnostic {
   location?: { file: string; line: number; column: number } | null;
 }
 
+export type SharedStorageKind = "appStorage" | "inMemory" | "fileStorage" | "other";
+
+export interface SharedStorageReference {
+  nodeId: string;
+  fieldName: string;
+}
+
+export interface SharedStorage {
+  id: string;
+  kind: SharedStorageKind;
+  key: string;
+  rawDescriptor: string;
+  referencedBy: SharedStorageReference[];
+}
+
 export interface Graph {
   schemaVersion: string;
   generator: { name: string; version: string };
@@ -97,5 +112,6 @@ export interface Graph {
   modules: Module[];
   nodes: NodeData[];
   edges: EdgeData[];
+  sharedStorages?: SharedStorage[];
   diagnostics: Diagnostic[];
 }
