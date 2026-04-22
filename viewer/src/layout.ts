@@ -1,9 +1,23 @@
 import dagre from "@dagrejs/dagre";
 import type { Edge, Node } from "@xyflow/react";
-import type { EdgeData, EdgeKind, Graph, NodeData } from "./types";
+import type { EdgeData, EdgeKind, Graph, NodeData, SharedStorageKind } from "./types";
 
 const NODE_WIDTH = 280;
 const NODE_HEIGHT = 200;
+
+const STORAGE_NODE_WIDTH = 240;
+const STORAGE_NODE_HEIGHT = 72;
+const SLIM_REDUCER_WIDTH = 220;
+const SLIM_REDUCER_HEIGHT = 64;
+
+/// Fixed palette for the shared-state node badges — users should learn
+/// which color means which storage kind, so we don't hash these.
+export const storageKindStyle: Record<SharedStorageKind, { fg: string; bg: string; label: string }> = {
+  appStorage:  { fg: "#9bb6ef", bg: "rgba(91,141,239,0.18)",  label: "app" },
+  inMemory:    { fg: "#4fd3ae", bg: "rgba(16,172,132,0.18)",  label: "mem" },
+  fileStorage: { fg: "#ffb280", bg: "rgba(230,126,34,0.18)",  label: "file" },
+  other:       { fg: "#c291e4", bg: "rgba(142,68,173,0.18)",  label: "other" },
+};
 
 export function moduleStyle(moduleId: string): { fg: string; bg: string; border: string } {
   let h = 0;
@@ -107,10 +121,8 @@ function makeEdge(e: EdgeData): Edge {
     type: "smoothstep",
     animated: e.presentation,
     data: { kind: e.kind, presentation: e.presentation, sourceId: e.sourceId, targetId: e.targetId },
-    label: shortLabel(e),
-    labelStyle: { fontSize: 10, fill: "#666" },
-    labelBgStyle: { fill: "#fff", fillOpacity: 0.85 },
-    labelBgPadding: [2, 3],
+    // No default label — color already encodes kind, target node name shows destination.
+    // Full statePath / actionPath is still in the drawer's Graph tab when a node is selected.
     style: {
       stroke: style.stroke,
       strokeWidth: e.presentation ? 2 : 1.5,
@@ -156,12 +168,131 @@ export function applyViewState(
   return { nodes, edges, orphans: laid.orphans, filtered: laid.filtered };
 }
 
-function shortLabel(e: EdgeData): string {
-  const kindLabel = edgeStyle[e.kind].label;
-  if (e.statePath) {
-    // `\.foo` or `\.$foo` — strip the leading `\.` for tidier labels
-    const clean = e.statePath.replace(/^\\\./, "");
-    return `${kindLabel}  ${clean}`;
+
+// ----------------------------------------------------------------------------
+// Shared-state view
+// ----------------------------------------------------------------------------
+
+export interface SharedLayoutOptions {
+  modules?: Set<string>;
+  storageKinds?: Set<SharedStorageKind>;
+  keyQuery?: string;
+  hideSingleReference?: boolean;
+}
+
+/// Second, orthogonal graph: nodes are @Shared storage keys on the left,
+/// referenced reducers on the right, one edge per binding. Makes coupling
+/// through shared state legible — which reducers touch the same storage?
+export function layoutSharedGraph(graph: Graph, filters: SharedLayoutOptions): LaidOutGraph {
+  const moduleById = new Map(graph.modules.map((m) => [m.id, m]));
+  const nodeById = new Map(graph.nodes.map((n) => [n.id, n]));
+  const storages = graph.sharedStorages ?? [];
+
+  const query = (filters.keyQuery ?? "").trim().toLowerCase();
+
+  const visibleStorages = storages.filter((s) => {
+    if (filters.storageKinds && !filters.storageKinds.has(s.kind)) return false;
+    if (query && !s.key.toLowerCase().includes(query)) return false;
+    if (filters.hideSingleReference && s.referencedBy.length <= 1) return false;
+    if (filters.modules) {
+      const anyInModule = s.referencedBy.some((r) => {
+        const n = nodeById.get(r.nodeId);
+        return n ? filters.modules!.has(n.moduleId) : false;
+      });
+      if (!anyInModule) return false;
+    }
+    return true;
+  });
+
+  // Unique reducer ids referenced by at least one visible storage.
+  const visibleReducerIds = new Set<string>();
+  for (const s of visibleStorages) {
+    for (const r of s.referencedBy) {
+      if (!nodeById.has(r.nodeId)) continue;
+      if (filters.modules) {
+        const n = nodeById.get(r.nodeId)!;
+        if (!filters.modules.has(n.moduleId)) continue;
+      }
+      visibleReducerIds.add(r.nodeId);
+    }
   }
-  return kindLabel;
+
+  const g = new dagre.graphlib.Graph();
+  g.setGraph({ rankdir: "LR", nodesep: 22, ranksep: 220, marginx: 40, marginy: 40 });
+  g.setDefaultEdgeLabel(() => ({}));
+
+  for (const s of visibleStorages) {
+    g.setNode(s.id, { width: STORAGE_NODE_WIDTH, height: STORAGE_NODE_HEIGHT });
+  }
+  for (const id of visibleReducerIds) {
+    g.setNode(id, { width: SLIM_REDUCER_WIDTH, height: SLIM_REDUCER_HEIGHT });
+  }
+
+  // Edges: storage → each reducer that binds it (skip if reducer is filtered out).
+  const rawEdges: { id: string; sourceId: string; targetId: string; fieldName: string }[] = [];
+  for (const s of visibleStorages) {
+    for (const r of s.referencedBy) {
+      if (!visibleReducerIds.has(r.nodeId)) continue;
+      rawEdges.push({
+        id: `sharedEdge:${s.id}→${r.nodeId}:${r.fieldName}`,
+        sourceId: s.id,
+        targetId: r.nodeId,
+        fieldName: r.fieldName,
+      });
+      g.setEdge(s.id, r.nodeId);
+    }
+  }
+
+  dagre.layout(g);
+
+  const storageNodes: Node[] = visibleStorages.map((s) => {
+    const laid = g.node(s.id);
+    return {
+      id: s.id,
+      type: "sharedStorage",
+      position: { x: laid.x - STORAGE_NODE_WIDTH / 2, y: laid.y - STORAGE_NODE_HEIGHT / 2 },
+      data: { storage: s, faded: false, selected: false },
+    };
+  });
+
+  const reducerNodes: Node[] = [...visibleReducerIds].map((id) => {
+    const laid = g.node(id);
+    const node = nodeById.get(id)!;
+    const moduleName = moduleById.get(node.moduleId)?.name ?? node.moduleId;
+    return {
+      id,
+      type: "reducer",
+      position: { x: laid.x - SLIM_REDUCER_WIDTH / 2, y: laid.y - SLIM_REDUCER_HEIGHT / 2 },
+      data: { node, moduleName, slim: true, faded: false, selected: false },
+    };
+  });
+
+  const rfEdges: Edge[] = rawEdges.map((e) => ({
+    id: e.id,
+    source: e.sourceId,
+    target: e.targetId,
+    type: "smoothstep",
+    // No label — drawer's "Referenced by" list shows field names with context.
+    data: { sourceId: e.sourceId, targetId: e.targetId, fieldName: e.fieldName },
+    style: { stroke: "#5b8def", strokeWidth: 1.4, strokeDasharray: "4 3" },
+  }));
+
+  // `filtered` is expected by applyViewState; we surface the raw pieces for parity.
+  const pseudoEdges: EdgeData[] = rawEdges.map((e) => ({
+    id: e.id,
+    sourceId: e.sourceId,
+    targetId: e.targetId,
+    kind: "scope",
+    presentation: false,
+  }));
+  const filteredNodes: NodeData[] = [...visibleReducerIds]
+    .map((id) => nodeById.get(id))
+    .filter((n): n is NodeData => Boolean(n));
+
+  return {
+    nodes: [...storageNodes, ...reducerNodes],
+    edges: rfEdges,
+    orphans: [],
+    filtered: { nodes: filteredNodes, edges: pseudoEdges },
+  };
 }

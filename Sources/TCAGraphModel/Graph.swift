@@ -40,6 +40,7 @@ public struct Graph: Codable, Equatable, Sendable {
   public let modules: [Module]
   public let nodes: [Node]
   public let edges: [Edge]
+  public let sharedStorages: [SharedStorage]
   public let diagnostics: [Diagnostic]
 
   public init(
@@ -50,6 +51,7 @@ public struct Graph: Codable, Equatable, Sendable {
     modules: [Module],
     nodes: [Node],
     edges: [Edge] = [],
+    sharedStorages: [SharedStorage] = [],
     diagnostics: [Diagnostic] = []
   ) {
     self.schemaVersion = schemaVersion
@@ -59,6 +61,7 @@ public struct Graph: Codable, Equatable, Sendable {
     self.modules = modules
     self.nodes = nodes
     self.edges = edges
+    self.sharedStorages = sharedStorages
     self.diagnostics = diagnostics
   }
 }

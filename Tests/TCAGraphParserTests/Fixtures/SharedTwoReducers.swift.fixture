@@ -1,0 +1,35 @@
+import ComposableArchitecture
+
+@Reducer
+public struct FeatureA {
+  @ObservableState
+  public struct State: Equatable {
+    @Shared(.appStorage("user_referral")) var referral: String? = nil
+    @Shared(.inMemory("fcm_token")) var fcm: String? = nil
+  }
+
+  public enum Action: Equatable {
+    case tick
+  }
+
+  public var body: some Reducer<State, Action> {
+    Reduce { _, _ in .none }
+  }
+}
+
+@Reducer
+public struct FeatureB {
+  @ObservableState
+  public struct State: Equatable {
+    @Shared(.appStorage("user_referral")) var referral: String? = nil
+    @Shared(.fileStorage(.documentsDirectory.appending(component: "updateInfo.json"))) var updateInfo: String? = nil
+  }
+
+  public enum Action: Equatable {
+    case tick
+  }
+
+  public var body: some Reducer<State, Action> {
+    Reduce { _, _ in .none }
+  }
+}

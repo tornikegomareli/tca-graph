@@ -171,7 +171,7 @@ struct CLI {
     )
 
     FileHandle.standardError.write(
-      Data("Indexed \(result.nodes.count) reducers, \(result.edges.count) edges, \(result.diagnostics.count) diagnostics\n".utf8)
+      Data("Indexed \(result.nodes.count) reducers, \(result.edges.count) edges, \(result.sharedStorages.count) shared storages, \(result.diagnostics.count) diagnostics\n".utf8)
     )
 
     let iso = ISO8601DateFormatter()
@@ -186,6 +186,7 @@ struct CLI {
       modules: discovery.modules,
       nodes: result.nodes,
       edges: result.edges,
+      sharedStorages: result.sharedStorages,
       diagnostics: result.diagnostics
     )
 
