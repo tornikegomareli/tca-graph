@@ -1,23 +1,46 @@
-import type { EdgeKind, Graph } from "../types";
-import { moduleStyle } from "../layout";
+import type { EdgeKind, Graph, SharedStorageKind } from "../types";
+import { moduleStyle, storageKindStyle } from "../layout";
+
+export type ViewMode = "reducers" | "shared";
 
 interface Props {
   graph: Graph;
+  mode: ViewMode;
+
   selectedModules: Set<string>;
-  selectedKinds: Set<EdgeKind>;
   onModulesChange: (next: Set<string>) => void;
+
+  // Reducer-mode filters
+  selectedKinds: Set<EdgeKind>;
   onKindsChange: (next: Set<EdgeKind>) => void;
+
+  // Shared-mode filters
+  selectedStorageKinds: Set<SharedStorageKind>;
+  onStorageKindsChange: (next: Set<SharedStorageKind>) => void;
+  keyQuery: string;
+  onKeyQueryChange: (q: string) => void;
+  hideSingleReference: boolean;
+  onHideSingleReferenceChange: (v: boolean) => void;
+
   stats: { nodes: number; edges: number; orphans: number };
 }
 
-const KINDS: EdgeKind[] = ["scope", "ifLet", "ifCaseLet", "forEach", "combine"];
+const EDGE_KINDS: EdgeKind[] = ["scope", "ifLet", "ifCaseLet", "forEach", "combine"];
+const STORAGE_KINDS: SharedStorageKind[] = ["appStorage", "inMemory", "fileStorage", "other"];
 
 export function Sidebar({
   graph,
+  mode,
   selectedModules,
-  selectedKinds,
   onModulesChange,
+  selectedKinds,
   onKindsChange,
+  selectedStorageKinds,
+  onStorageKindsChange,
+  keyQuery,
+  onKeyQueryChange,
+  hideSingleReference,
+  onHideSingleReferenceChange,
   stats,
 }: Props) {
   const moduleNodeCount = new Map<string, number>();
@@ -38,6 +61,12 @@ export function Sidebar({
     if (next.has(k)) next.delete(k); else next.add(k);
     onKindsChange(next);
   };
+  const toggleStorageKind = (k: SharedStorageKind) => {
+    const next = new Set(selectedStorageKinds);
+    if (next.has(k)) next.delete(k); else next.add(k);
+    onStorageKindsChange(next);
+  };
+
   const selectAllModules = () => onModulesChange(new Set(modulesWithNodes.map((m) => m.id)));
   const clearModules = () => onModulesChange(new Set());
 
@@ -46,7 +75,8 @@ export function Sidebar({
       <div className="sb-header">
         <h1>tca-graph</h1>
         <div className="sb-sub">
-          {stats.nodes} nodes · {stats.edges} edges · {stats.orphans} orphans
+          {stats.nodes} nodes · {stats.edges} edges
+          {mode === "reducers" && ` · ${stats.orphans} orphans`}
         </div>
         <div className="sb-source" title={graph.source.rootPath}>
           {graph.source.rootPath.split("/").slice(-2).join("/")}
@@ -54,22 +84,71 @@ export function Sidebar({
         </div>
       </div>
 
-      <section className="sb-section">
-        <div className="sb-section-header">
-          <h2>Edge kinds</h2>
-        </div>
-        <div className="sb-chips">
-          {KINDS.map((k) => (
-            <button
-              key={k}
-              className={`sb-chip sb-kind-${k} ${selectedKinds.has(k) ? "is-on" : ""}`}
-              onClick={() => toggleKind(k)}
-            >
-              {k}
-            </button>
-          ))}
-        </div>
-      </section>
+      {mode === "reducers" && (
+        <section className="sb-section">
+          <div className="sb-section-header">
+            <h2>Edge kinds</h2>
+          </div>
+          <div className="sb-chips">
+            {EDGE_KINDS.map((k) => (
+              <button
+                key={k}
+                className={`sb-chip sb-kind-${k} ${selectedKinds.has(k) ? "is-on" : ""}`}
+                onClick={() => toggleKind(k)}
+              >
+                {k}
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {mode === "shared" && (
+        <>
+          <section className="sb-section">
+            <div className="sb-section-header">
+              <h2>Storage kinds</h2>
+            </div>
+            <div className="sb-chips">
+              {STORAGE_KINDS.map((k) => {
+                const style = storageKindStyle[k];
+                const on = selectedStorageKinds.has(k);
+                return (
+                  <button
+                    key={k}
+                    className={`sb-chip ${on ? "is-on" : ""}`}
+                    onClick={() => toggleStorageKind(k)}
+                    style={on ? { background: style.bg, color: style.fg, borderColor: style.fg } : undefined}
+                  >
+                    {k}
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+
+          <section className="sb-section">
+            <div className="sb-section-header">
+              <h2>Key filter</h2>
+            </div>
+            <input
+              type="text"
+              className="sb-input"
+              placeholder="Substring match…"
+              value={keyQuery}
+              onChange={(e) => onKeyQueryChange(e.target.value)}
+            />
+            <label className="sb-checkbox">
+              <input
+                type="checkbox"
+                checked={hideSingleReference}
+                onChange={(e) => onHideSingleReferenceChange(e.target.checked)}
+              />
+              <span>Hide single-reference storages</span>
+            </label>
+          </section>
+        </>
+      )}
 
       <section className="sb-section">
         <div className="sb-section-header">

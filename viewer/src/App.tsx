@@ -10,15 +10,17 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 
-import { Sidebar } from "./components/Sidebar";
+import { Sidebar, type ViewMode } from "./components/Sidebar";
 import { ReducerNode } from "./components/ReducerNode";
+import { SharedStorageNode } from "./components/SharedStorageNode";
 import { DetailsDrawer } from "./components/DetailsDrawer";
+import { SharedStorageDrawer } from "./components/SharedStorageDrawer";
 import { SearchOverlay } from "./components/SearchOverlay";
-import { applyViewState, layoutGraph } from "./layout";
+import { applyViewState, layoutGraph, layoutSharedGraph } from "./layout";
 import { buildNeighborhood } from "./graph";
-import type { EdgeKind, Graph } from "./types";
+import type { EdgeKind, Graph, SharedStorage, SharedStorageKind } from "./types";
 
-const nodeTypes = { reducer: ReducerNode };
+const nodeTypes = { reducer: ReducerNode, sharedStorage: SharedStorageNode };
 
 export default function App() {
   const [graph, setGraph] = useState<Graph | null>(null);
@@ -52,12 +54,19 @@ export default function App() {
 function GraphView({ graph }: { graph: Graph }) {
   const rf = useReactFlow();
 
+  const [mode, setMode] = useState<ViewMode>("reducers");
   const [selectedModules, setSelectedModules] = useState<Set<string>>(
     () => new Set(graph.nodes.map((n) => n.moduleId))
   );
   const [selectedKinds, setSelectedKinds] = useState<Set<EdgeKind>>(
     () => new Set(["scope", "ifLet", "ifCaseLet", "forEach", "combine"])
   );
+  const [selectedStorageKinds, setSelectedStorageKinds] = useState<Set<SharedStorageKind>>(
+    () => new Set(["appStorage", "inMemory", "fileStorage", "other"])
+  );
+  const [keyQuery, setKeyQuery] = useState("");
+  const [hideSingleReference, setHideSingleReference] = useState(false);
+
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -70,28 +79,46 @@ function GraphView({ graph }: { graph: Graph }) {
     () => new Map(graph.nodes.map((n) => [n.id, n])),
     [graph.nodes]
   );
+  const storageById = useMemo(
+    () => new Map((graph.sharedStorages ?? []).map((s) => [s.id, s])),
+    [graph.sharedStorages]
+  );
 
   // Pass 1: dagre runs only when graph or structural filters change.
   const baseLaid = useMemo(
-    () => layoutGraph(graph, { modules: selectedModules, edgeKinds: selectedKinds }),
-    [graph, selectedModules, selectedKinds]
+    () => {
+      if (mode === "shared") {
+        return layoutSharedGraph(graph, {
+          modules: selectedModules,
+          storageKinds: selectedStorageKinds,
+          keyQuery,
+          hideSingleReference,
+        });
+      }
+      return layoutGraph(graph, { modules: selectedModules, edgeKinds: selectedKinds });
+    },
+    [graph, mode, selectedModules, selectedKinds, selectedStorageKinds, keyQuery, hideSingleReference]
   );
 
   // Pass 2: hover/selection only flips classNames; positions unchanged.
-  // Focus is computed against the *filtered* edges so it matches the visible topology —
-  // a node whose only connection is a hidden edge won't be highlighted.
   const focusIds = useMemo(() => {
     const activeId = hoveredId ?? selectedId;
     if (!activeId) return null;
-    const visibleIds = new Set(baseLaid.filtered.nodes.map((n) => n.id));
+    const visibleIds = new Set(baseLaid.nodes.map((n) => n.id));
     if (!visibleIds.has(activeId)) return null;
     return buildNeighborhood(baseLaid.filtered.edges, activeId).all;
-  }, [baseLaid.filtered, hoveredId, selectedId]);
+  }, [baseLaid, hoveredId, selectedId]);
 
   const laid = useMemo(
     () => applyViewState(baseLaid, { focusIds, selectedId }),
     [baseLaid, focusIds, selectedId]
   );
+
+  // Reset selection when switching modes so stale IDs from the other view don't linger.
+  useEffect(() => {
+    setSelectedId(null);
+    setHoveredId(null);
+  }, [mode]);
 
   // Global keyboard shortcuts
   useEffect(() => {
@@ -115,26 +142,36 @@ function GraphView({ graph }: { graph: Graph }) {
 
   const focusNode = useCallback(
     (id: string) => {
+      // If the caller is navigating to a reducer while we're on the shared view,
+      // flip back so the node actually exists in the laid graph before we center.
+      const isStorage = id.startsWith("shared:");
+      if (!isStorage && mode === "shared") {
+        setMode("reducers");
+      }
       setSelectedId(id);
       setSearchOpen(false);
-      // Center the viewport on the node
-      const rfNode = rf.getNode(id);
-      if (rfNode) {
-        rf.setCenter(rfNode.position.x + 140, rfNode.position.y + 100, { zoom: 1.1, duration: 400 });
-      }
+      // Center viewport — defer to next frame so the layout after mode flip is in place.
+      requestAnimationFrame(() => {
+        const rfNode = rf.getNode(id);
+        if (rfNode) {
+          rf.setCenter(rfNode.position.x + 140, rfNode.position.y + 60, { zoom: 1.1, duration: 400 });
+        }
+      });
     },
-    [rf]
+    [mode, rf]
   );
 
-  const selectedNode = selectedId ? nodeById.get(selectedId) ?? null : null;
+  const selectedNode = selectedId && !selectedId.startsWith("shared:")
+    ? nodeById.get(selectedId) ?? null
+    : null;
+  const selectedStorage: SharedStorage | null = selectedId?.startsWith("shared:")
+    ? storageById.get(selectedId) ?? null
+    : null;
+  const drawerOpen = selectedNode !== null || selectedStorage !== null;
 
   const onNodeClick = useCallback((_: unknown, n: RFNode) => focusNode(n.id), [focusNode]);
 
   // Hover is gated to avoid flicker during rapid mouse drive-bys.
-  //   - First activation needs a dwell period (user actually rested on this node).
-  //   - Once activated, switching between nodes is near-instant (feels snappy).
-  //   - Leaving also has a small grace window so flicking between adjacent nodes
-  //     doesn't cause a full unfade/refade cycle.
   const hoverTimerRef = useRef<number | null>(null);
   const hoverTargetRef = useRef<string | null>(null);
 
@@ -149,7 +186,6 @@ function GraphView({ graph }: { graph: Graph }) {
   const onNodeMouseEnter = useCallback(
     (_: unknown, n: RFNode) => {
       hoverTargetRef.current = n.id;
-      // First activation: wait for deliberate dwell. Already active: quick switch.
       const delay = hoveredId === null ? 250 : 60;
       scheduleHover(delay);
     },
@@ -163,7 +199,6 @@ function GraphView({ graph }: { graph: Graph }) {
 
   const onPaneClick = useCallback(() => { setSelectedId(null); }, []);
 
-  // Clean up any pending timer on unmount.
   useEffect(() => {
     return () => {
       if (hoverTimerRef.current !== null) window.clearTimeout(hoverTimerRef.current);
@@ -171,21 +206,55 @@ function GraphView({ graph }: { graph: Graph }) {
   }, []);
 
   return (
-    <div className={`layout ${selectedNode ? "with-drawer" : ""}`}>
+    <div className={`layout ${drawerOpen ? "with-drawer" : ""}`}>
       <Sidebar
         graph={graph}
+        mode={mode}
         selectedModules={selectedModules}
-        selectedKinds={selectedKinds}
         onModulesChange={setSelectedModules}
+        selectedKinds={selectedKinds}
         onKindsChange={setSelectedKinds}
+        selectedStorageKinds={selectedStorageKinds}
+        onStorageKindsChange={setSelectedStorageKinds}
+        keyQuery={keyQuery}
+        onKeyQueryChange={setKeyQuery}
+        hideSingleReference={hideSingleReference}
+        onHideSingleReferenceChange={setHideSingleReference}
         stats={{ nodes: laid.nodes.length, edges: laid.edges.length, orphans: laid.orphans.length }}
       />
       <main className="canvas">
+        <div className="mode-toggle" role="tablist">
+          <button
+            role="tab"
+            className={mode === "reducers" ? "is-active" : ""}
+            onClick={() => setMode("reducers")}
+          >
+            Reducers
+          </button>
+          <button
+            role="tab"
+            className={mode === "shared" ? "is-active" : ""}
+            onClick={() => setMode("shared")}
+          >
+            Shared state
+            {graph.sharedStorages && graph.sharedStorages.length > 0 && (
+              <span className="mode-toggle-badge">{graph.sharedStorages.length}</span>
+            )}
+          </button>
+        </div>
+
+        {mode === "shared" && laid.nodes.length === 0 && (
+          <div className="empty-overlay">
+            <p>No shared storages match the current filters.</p>
+          </div>
+        )}
+
         <ReactFlow
           nodes={laid.nodes}
           edges={laid.edges}
           nodeTypes={nodeTypes}
           fitView
+          fitViewOptions={{ duration: 300 }}
           proOptions={{ hideAttribution: true }}
           minZoom={0.1}
           maxZoom={2}
@@ -199,10 +268,12 @@ function GraphView({ graph }: { graph: Graph }) {
           <MiniMap pannable zoomable nodeColor="#5b8def" />
         </ReactFlow>
 
-        <button className="search-pill" onClick={() => setSearchOpen(true)} title="Search (⌘K or /)">
-          <span>Search</span>
-          <kbd>⌘K</kbd>
-        </button>
+        {mode === "reducers" && (
+          <button className="search-pill" onClick={() => setSearchOpen(true)} title="Search (⌘K or /)">
+            <span>Search</span>
+            <kbd>⌘K</kbd>
+          </button>
+        )}
       </main>
 
       {selectedNode && (
@@ -212,6 +283,15 @@ function GraphView({ graph }: { graph: Graph }) {
           node={selectedNode}
           onClose={() => setSelectedId(null)}
           onNavigateTo={focusNode}
+        />
+      )}
+
+      {selectedStorage && (
+        <SharedStorageDrawer
+          graph={graph}
+          storage={selectedStorage}
+          onClose={() => setSelectedId(null)}
+          onNavigateToReducer={focusNode}
         />
       )}
 
