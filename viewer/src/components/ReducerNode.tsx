@@ -7,6 +7,9 @@ export interface ReducerNodeData extends Record<string, unknown> {
   moduleName: string;
   faded?: boolean;
   selected?: boolean;
+  /// When true, render a compact variant used in the shared-state view where the
+  /// reducer is a secondary citizen — no stat row, no chips, just module + name.
+  slim?: boolean;
 }
 
 const dialectColor: Record<string, string> = {
@@ -17,13 +20,36 @@ const dialectColor: Record<string, string> = {
 };
 
 export function ReducerNode({ data }: NodeProps) {
-  const { node, moduleName, selected } = data as ReducerNodeData;
+  const { node, moduleName, selected, slim } = data as ReducerNodeData;
+  const accent = dialectColor[node.tcaDialect] ?? dialectColor.unknown;
+  const mod = moduleStyle(node.moduleId);
+
+  if (slim) {
+    return (
+      <div
+        className={`reducer-node is-slim ${selected ? "is-selected" : ""}`}
+        style={{ borderColor: accent }}
+      >
+        <Handle type="target" position={Position.Left} />
+        <div className="rn-slim-inner">
+          <span
+            className="rn-module"
+            title={moduleName}
+            style={{ color: mod.fg, background: mod.bg, borderColor: mod.border }}
+          >
+            {moduleName}
+          </span>
+          <span className="rn-name" title={node.name}>{node.name}</span>
+        </div>
+        <Handle type="source" position={Position.Right} />
+      </div>
+    );
+  }
+
   const fieldCount = node.state?.fields.length ?? 0;
   const caseCount = node.action?.cases.length ?? 0;
   const nestedCount = node.action?.nestedEnums.length ?? 0;
   const depCount = node.dependencies.length;
-  const accent = dialectColor[node.tcaDialect] ?? dialectColor.unknown;
-  const mod = moduleStyle(node.moduleId);
 
   return (
     <div className={`reducer-node ${selected ? "is-selected" : ""}`} style={{ borderColor: accent }}>

@@ -392,3 +392,16 @@ pre  { font-family: "SF Mono", "Menlo", monospace; font-size: 11px; background: 
   min-width: 22px; text-align: center;
   background: rgba(255,255,255,0.06); padding: 2px 8px; border-radius: 10px;
 }
+
+.reducer-node.is-slim {
+  width: 220px; height: 64px;
+  min-height: 0;
+  display: flex; align-items: center;
+  padding: 0 12px;
+}
+.reducer-node.is-slim .rn-slim-inner {
+  display: flex; flex-direction: column; gap: 2px; width: 100%;
+  min-width: 0;
+}
+.reducer-node.is-slim .rn-module { font-size: 9px; padding: 1px 6px; }
+.reducer-node.is-slim .rn-name { font-size: 13px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
