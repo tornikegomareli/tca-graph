@@ -548,3 +548,9 @@ pre  { font-family: "SF Mono", "Menlo", monospace; font-size: 11px; background: 
   font-size: 10px; background: rgba(255,255,255,0.05);
   padding: 1px 4px; border-radius: 3px;
 }
+
+.ssd-hidden-hint {
+  font-size: 10px; text-transform: uppercase; letter-spacing: 0.3px;
+  color: var(--muted); background: rgba(255,255,255,0.05);
+  padding: 1px 5px; border-radius: 4px;
+}

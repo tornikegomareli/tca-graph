@@ -166,15 +166,30 @@ function GraphView({ graph }: { graph: Graph }) {
 
   const focusNode = useCallback(
     (id: string) => {
-      // If the caller is navigating to a reducer while we're on the shared view,
-      // flip back so the node actually exists in the laid graph before we center.
       const isStorage = id.startsWith("shared:");
+      // Flip back to reducer mode if we're navigating from the shared view to a reducer,
+      // so the node actually exists in the laid graph before we try to center.
       if (!isStorage && mode === "shared") {
         setMode("reducers");
       }
+      // If navigating to a reducer whose module is currently filtered out, bring that
+      // module back into the visible set. Otherwise the target would be laid but
+      // filtered and the viewport would pan to an empty spot.
+      if (!isStorage) {
+        const target = nodeById.get(id);
+        if (target && !selectedModules.has(target.moduleId)) {
+          setSelectedModules((prev) => {
+            if (prev.has(target.moduleId)) return prev;
+            const next = new Set(prev);
+            next.add(target.moduleId);
+            return next;
+          });
+        }
+      }
       setSelectedId(id);
       setSearchOpen(false);
-      // Center viewport — defer to next frame so the layout after mode flip is in place.
+      // Center viewport — defer to next frame so the layout after mode/filter changes
+      // is in place before we read positions.
       requestAnimationFrame(() => {
         const rfNode = rf.getNode(id);
         if (rfNode) {
@@ -182,7 +197,7 @@ function GraphView({ graph }: { graph: Graph }) {
         }
       });
     },
-    [mode, rf]
+    [mode, nodeById, rf, selectedModules]
   );
 
   const selectedNode = selectedId && !selectedId.startsWith("shared:")
@@ -314,6 +329,7 @@ function GraphView({ graph }: { graph: Graph }) {
         <SharedStorageDrawer
           graph={graph}
           storage={selectedStorage}
+          reducerVisibleNodeIds={reducerVisibleNodeIds}
           onClose={() => setSelectedId(null)}
           onNavigateToReducer={focusNode}
         />
