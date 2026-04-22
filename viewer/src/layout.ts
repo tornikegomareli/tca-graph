@@ -121,10 +121,8 @@ function makeEdge(e: EdgeData): Edge {
     type: "smoothstep",
     animated: e.presentation,
     data: { kind: e.kind, presentation: e.presentation, sourceId: e.sourceId, targetId: e.targetId },
-    label: shortLabel(e),
-    labelStyle: { fontSize: 10, fill: "#666" },
-    labelBgStyle: { fill: "#fff", fillOpacity: 0.85 },
-    labelBgPadding: [2, 3],
+    // No default label — color already encodes kind, target node name shows destination.
+    // Full statePath / actionPath is still in the drawer's Graph tab when a node is selected.
     style: {
       stroke: style.stroke,
       strokeWidth: e.presentation ? 2 : 1.5,
@@ -170,15 +168,6 @@ export function applyViewState(
   return { nodes, edges, orphans: laid.orphans, filtered: laid.filtered };
 }
 
-function shortLabel(e: EdgeData): string {
-  const kindLabel = edgeStyle[e.kind].label;
-  if (e.statePath) {
-    // `\.foo` or `\.$foo` — strip the leading `\.` for tidier labels
-    const clean = e.statePath.replace(/^\\\./, "");
-    return `${kindLabel}  ${clean}`;
-  }
-  return kindLabel;
-}
 
 // ----------------------------------------------------------------------------
 // Shared-state view
@@ -283,11 +272,8 @@ export function layoutSharedGraph(graph: Graph, filters: SharedLayoutOptions): L
     source: e.sourceId,
     target: e.targetId,
     type: "smoothstep",
-    label: e.fieldName,
-    labelStyle: { fontSize: 10, fill: "#666" },
-    labelBgStyle: { fill: "#fff", fillOpacity: 0.85 },
-    labelBgPadding: [2, 3],
-    data: { sourceId: e.sourceId, targetId: e.targetId },
+    // No label — drawer's "Referenced by" list shows field names with context.
+    data: { sourceId: e.sourceId, targetId: e.targetId, fieldName: e.fieldName },
     style: { stroke: "#5b8def", strokeWidth: 1.4, strokeDasharray: "4 3" },
   }));
 
