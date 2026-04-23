@@ -273,8 +273,12 @@ export function layoutSharedGraph(graph: Graph, filters: SharedLayoutOptions): L
     target: e.targetId,
     type: "smoothstep",
     // No label — drawer's "Referenced by" list shows field names with context.
+    // Solid stroke: the previous dashed style hit a React Flow smoothstep quirk where
+    // short perpendicular segments could land entirely inside a single dash cycle,
+    // making some edges look solid while others looked dashed despite identical
+    // styling. Bipartite layout already makes the semantic clear.
     data: { sourceId: e.sourceId, targetId: e.targetId, fieldName: e.fieldName },
-    style: { stroke: "#5b8def", strokeWidth: 1.4, strokeDasharray: "4 3" },
+    style: { stroke: "#5b8def", strokeWidth: 1.4, strokeOpacity: 0.65 },
   }));
 
   // `filtered` is expected by applyViewState; we surface the raw pieces for parity.
