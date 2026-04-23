@@ -1,6 +1,6 @@
 import { Handle, Position, type NodeProps } from "@xyflow/react";
 import type { SharedStorage } from "../types";
-import { moduleStyle, storageKindStyle } from "../layout";
+import { storageKindStyle } from "../layout";
 
 export interface SharedStorageNodeData extends Record<string, unknown> {
   storage: SharedStorage;
@@ -11,12 +11,15 @@ export interface SharedStorageNodeData extends Record<string, unknown> {
 export function SharedStorageNode({ data }: NodeProps) {
   const { storage, selected } = data as SharedStorageNodeData;
   const kind = storageKindStyle[storage.kind];
-  const border = moduleStyle(storage.id).border;
 
+  // Border tracks the storage kind, so every appStorage card looks the same,
+  // every inMemory the same, etc. (Previously this was a per-id hash, which
+  // accidentally picked greens and reds that conflict with the semantic meanings
+  // those colors carry on reducer cards — green = child state, red = @Presents.)
   return (
     <div
       className={`shared-node ${selected ? "is-selected" : ""}`}
-      style={{ borderColor: border }}
+      style={{ borderColor: kind.fg }}
     >
       <Handle type="target" position={Position.Left} />
       <div className="sn-inner">
