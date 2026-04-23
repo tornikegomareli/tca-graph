@@ -18,7 +18,7 @@ export function Legend({ mode }: Props) {
         className="sb-section-header sb-legend-toggle"
         onClick={() => setOpen((o) => !o)}
       >
-        <h2>Legend</h2>
+        <h2>What's what</h2>
         <span className="sb-legend-caret">{open ? "▾" : "▸"}</span>
       </button>
       {open && (mode === "reducers" ? <ReducerLegend /> : <SharedLegend />)}

@@ -525,20 +525,24 @@ pre  { font-family: "SF Mono", "Menlo", monospace; font-size: 11px; background: 
   font-size: 11px;
 }
 .lg-list li {
-  display: grid; grid-template-columns: 44px auto 1fr; gap: 6px;
-  align-items: center;
+  display: flex; align-items: center; gap: 10px;
+  min-height: 18px;
 }
-.lg-edge { display: block; }
+.lg-edge { flex-shrink: 0; display: block; }
 .lg-label {
+  flex-shrink: 0;
   font-family: "SF Mono", "Menlo", monospace;
   font-size: 11px; color: var(--text);
 }
-.lg-desc { color: var(--muted); font-size: 11px; }
 .lg-chip {
+  flex-shrink: 0;
   padding: 1px 6px; border-radius: 10px; font-size: 10px;
   font-family: "SF Mono", "Menlo", monospace;
   text-align: center;
-  width: fit-content; justify-self: start;
+}
+.lg-desc {
+  flex: 1; min-width: 0;
+  color: var(--muted); font-size: 11px;
 }
 .lg-hint {
   font-size: 11px; color: var(--muted); margin: 8px 0 0 0;
