@@ -70,7 +70,10 @@ export function DetailsDrawer({ graph, filteredEdges, node, onClose, onNavigateT
         {tab === "complexity" && (
           <ComplexityTab
             node={node}
-            outgoingCount={neighborhood.outgoingEdges.length}
+            // Use unfiltered graph.edges so the Children breakdown stays consistent
+            // with the parser-computed complexityScore (which sees all edges) even
+            // when the user toggles edge-kind filters in the sidebar.
+            outgoingCount={graph.edges.filter((e) => e.sourceId === node.id).length}
           />
         )}
         {tab === "edges" && (

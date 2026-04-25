@@ -1,3 +1,4 @@
+import type { CSSProperties } from "react";
 import { Handle, Position, type NodeProps } from "@xyflow/react";
 import type { NodeData } from "../types";
 import { moduleStyle } from "../layout";
@@ -30,7 +31,7 @@ export function ReducerNode({ data }: NodeProps) {
   // Inline size from layout so the heatmap-by-complexity overrides the CSS width.
   // Fall back to the slim variant's hardcoded shape and otherwise to undefined so
   // CSS defaults apply.
-  const sizeStyle: React.CSSProperties | undefined = !slim && width && height
+  const sizeStyle: CSSProperties | undefined = !slim && width && height
     ? { width, minHeight: height }
     : undefined;
 
