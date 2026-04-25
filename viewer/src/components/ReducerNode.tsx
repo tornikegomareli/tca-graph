@@ -7,6 +7,10 @@ export interface ReducerNodeData extends Record<string, unknown> {
   moduleName: string;
   faded?: boolean;
   selected?: boolean;
+  /// Width / height computed by layout based on complexity score. Applied as inline
+  /// style so the heatmap-by-size effect overrides the static CSS width.
+  width?: number;
+  height?: number;
   /// When true, render a compact variant used in the shared-state view where the
   /// reducer is a secondary citizen — no stat row, no chips, just module + name.
   slim?: boolean;
@@ -20,9 +24,15 @@ const dialectColor: Record<string, string> = {
 };
 
 export function ReducerNode({ data }: NodeProps) {
-  const { node, moduleName, selected, slim } = data as ReducerNodeData;
+  const { node, moduleName, selected, slim, width, height } = data as ReducerNodeData;
   const accent = dialectColor[node.tcaDialect] ?? dialectColor.unknown;
   const mod = moduleStyle(node.moduleId);
+  // Inline size from layout so the heatmap-by-complexity overrides the CSS width.
+  // Fall back to the slim variant's hardcoded shape and otherwise to undefined so
+  // CSS defaults apply.
+  const sizeStyle: React.CSSProperties | undefined = !slim && width && height
+    ? { width, minHeight: height }
+    : undefined;
 
   if (slim) {
     return (
@@ -52,7 +62,10 @@ export function ReducerNode({ data }: NodeProps) {
   const depCount = node.dependencies.length;
 
   return (
-    <div className={`reducer-node ${selected ? "is-selected" : ""}`} style={{ borderColor: accent }}>
+    <div
+      className={`reducer-node ${selected ? "is-selected" : ""}`}
+      style={{ borderColor: accent, ...sizeStyle }}
+    >
       <Handle type="target" position={Position.Top} />
       <div className="rn-header" style={{ borderColor: accent }}>
         <div

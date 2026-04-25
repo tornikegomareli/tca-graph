@@ -5,6 +5,20 @@ import type { EdgeData, EdgeKind, Graph, NodeData, SharedStorageKind } from "./t
 const NODE_WIDTH = 280;
 const NODE_HEIGHT = 200;
 
+/// Map a reducer's complexity score to a node size on the canvas.
+/// Caps growth at +40% so dagre can still lay things out cleanly. The base 280×200
+/// stays as the floor for tiny / scoreless nodes.
+function reducerNodeSize(score: number | undefined): { width: number; height: number } {
+  const s = Math.max(0, score ?? 0);
+  // Empirical scale: a score of ~250 reaches the cap. Gives a visible gradient on real
+  // codebases (Dashboard scored 99, simpler reducers ~10–30).
+  const boost = Math.min(0.4, s / 250);
+  return {
+    width: Math.round(NODE_WIDTH * (1 + boost)),
+    height: Math.round(NODE_HEIGHT * (1 + boost)),
+  };
+}
+
 const STORAGE_NODE_WIDTH = 240;
 const STORAGE_NODE_HEIGHT = 72;
 const SLIM_REDUCER_WIDTH = 220;
@@ -79,8 +93,13 @@ export function layoutGraph(graph: Graph, filters: LayoutOptions): LaidOutGraph 
   g.setGraph({ rankdir: "TB", nodesep: 60, ranksep: 100, marginx: 40, marginy: 40 });
   g.setDefaultEdgeLabel(() => ({}));
 
+  // Per-node sizing — bigger reducers get bigger cards so the canvas reads as a
+  // heatmap of complexity at a glance.
+  const sizeById = new Map<string, { width: number; height: number }>();
   for (const node of visibleNodes) {
-    g.setNode(node.id, { width: NODE_WIDTH, height: NODE_HEIGHT });
+    const size = reducerNodeSize(node.complexityScore);
+    sizeById.set(node.id, size);
+    g.setNode(node.id, size);
   }
   for (const edge of visibleEdges) {
     g.setEdge(edge.sourceId, edge.targetId);
@@ -91,11 +110,12 @@ export function layoutGraph(graph: Graph, filters: LayoutOptions): LaidOutGraph 
   const rfNodes: Node[] = visibleNodes.map((node) => {
     const laid = g.node(node.id);
     const moduleName = moduleById.get(node.moduleId)?.name ?? node.moduleId;
+    const size = sizeById.get(node.id) ?? { width: NODE_WIDTH, height: NODE_HEIGHT };
     return {
       id: node.id,
       type: "reducer",
-      position: { x: laid.x - NODE_WIDTH / 2, y: laid.y - NODE_HEIGHT / 2 },
-      data: { node, moduleName, faded: false, selected: false },
+      position: { x: laid.x - size.width / 2, y: laid.y - size.height / 2 },
+      data: { node, moduleName, width: size.width, height: size.height, faded: false, selected: false },
     };
   });
 
