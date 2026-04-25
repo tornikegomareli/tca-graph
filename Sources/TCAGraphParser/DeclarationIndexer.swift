@@ -90,12 +90,117 @@ public enum DeclarationIndexer {
 
     let sharedStorages = aggregateSharedStorages(nodes: nodes)
 
+    // Score every reducer and surface compile-time risks.
+    nodes = scoreNodes(nodes: nodes, edges: edges, rawEdges: rawEdges)
+
     return IndexResult(
       nodes: nodes,
       edges: edges,
       sharedStorages: sharedStorages,
       diagnostics: diagnostics
     )
+  }
+
+  // MARK: - Complexity scoring + risk detection
+
+  /// Research-backed thresholds. Cross any of these and you're in territory where the
+  /// Swift type-checker tends to give up or the codebase becomes hard to reason about.
+  enum RiskThreshold {
+    static let manyFields = 40
+    static let manyActions = 30
+    static let manyChildren = 10
+    static let deepChain = 4
+    static let destinationOverflow = 8
+  }
+
+  /// Walks every Node, computes a complexity score and a list of triggered risks,
+  /// then returns nodes with those fields populated. Pure post-pass — does not touch
+  /// state/action/edges.
+  static func scoreNodes(nodes: [Node], edges: [Edge], rawEdges: [RawEdge]) -> [Node] {
+    // Count outgoing edges per source node.
+    var outgoing: [String: Int] = [:]
+    for e in edges {
+      outgoing[e.sourceId, default: 0] += 1
+    }
+
+    // Largest chain depth ever observed per source node.
+    var depthBySource: [String: Int] = [:]
+    for raw in rawEdges {
+      let depth = raw.chainDepth
+      if let prev = depthBySource[raw.sourceNodeID] {
+        if depth > prev { depthBySource[raw.sourceNodeID] = depth }
+      } else {
+        depthBySource[raw.sourceNodeID] = depth
+      }
+    }
+
+    return nodes.map { node in
+      let fields = node.state?.fields.count ?? 0
+      let actionCases = node.action?.cases.count ?? 0
+      let nestedCases = node.action?.nestedEnums.reduce(0) { $0 + $1.cases.count } ?? 0
+      let actions = actionCases + nestedCases
+      let children = outgoing[node.id] ?? 0
+      let chainDepthMax = depthBySource[node.id] ?? 0
+
+      // Empirical weighting: children and chain depth dominate; field/action counts
+      // contribute linearly. Tunable.
+      let score = fields + actions + children * 2 + chainDepthMax * 3
+
+      var risks: [ReducerRisk] = []
+
+      if fields > RiskThreshold.manyFields {
+        risks.append(ReducerRisk(
+          kind: .manyFields, value: fields, threshold: RiskThreshold.manyFields,
+          message: "State has \(fields) fields — consider splitting."
+        ))
+      }
+      if actions > RiskThreshold.manyActions {
+        risks.append(ReducerRisk(
+          kind: .manyActions, value: actions, threshold: RiskThreshold.manyActions,
+          message: "Action enum exposes \(actions) cases — consider extracting features."
+        ))
+      }
+      if children > RiskThreshold.manyChildren {
+        risks.append(ReducerRisk(
+          kind: .manyChildren, value: children, threshold: RiskThreshold.manyChildren,
+          message: "Reducer composes \(children) children — body is approaching compiler limits."
+        ))
+      }
+      if chainDepthMax > RiskThreshold.deepChain {
+        risks.append(ReducerRisk(
+          kind: .deepChain, value: chainDepthMax, threshold: RiskThreshold.deepChain,
+          message: "Modifier chain depth \(chainDepthMax) — known type-checker pain point past 4."
+        ))
+      }
+      // Destination-overflow only applies to @Reducer enum patterns. We encode their
+      // cases as state.fields when isEnumReducer = true (kind == .enum here).
+      if node.state?.kind == .enum {
+        let cases = fields
+        if cases > RiskThreshold.destinationOverflow {
+          risks.append(ReducerRisk(
+            kind: .destinationOverflow, value: cases, threshold: RiskThreshold.destinationOverflow,
+            message: "Destination enum has \(cases) cases — compiler typecheck slows past 8."
+          ))
+        }
+      }
+
+      return Node(
+        id: node.id,
+        name: node.name,
+        kind: node.kind,
+        moduleId: node.moduleId,
+        location: node.location,
+        tcaDialect: node.tcaDialect,
+        attributes: node.attributes,
+        usesBinding: node.usesBinding,
+        state: node.state,
+        action: node.action,
+        dependencies: node.dependencies,
+        complexityScore: score,
+        chainDepthMax: chainDepthMax,
+        risks: risks
+      )
+    }
   }
 
   // MARK: - @Shared aggregation

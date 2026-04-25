@@ -1,0 +1,55 @@
+import ComposableArchitecture
+
+@Reducer
+public struct WideState {
+  @ObservableState
+  public struct State: Equatable {
+    var f01: Int = 0
+    var f02: Int = 0
+    var f03: Int = 0
+    var f04: Int = 0
+    var f05: Int = 0
+    var f06: Int = 0
+    var f07: Int = 0
+    var f08: Int = 0
+    var f09: Int = 0
+    var f10: Int = 0
+    var f11: Int = 0
+    var f12: Int = 0
+    var f13: Int = 0
+    var f14: Int = 0
+    var f15: Int = 0
+    var f16: Int = 0
+    var f17: Int = 0
+    var f18: Int = 0
+    var f19: Int = 0
+    var f20: Int = 0
+    var f21: Int = 0
+    var f22: Int = 0
+    var f23: Int = 0
+    var f24: Int = 0
+    var f25: Int = 0
+    var f26: Int = 0
+    var f27: Int = 0
+    var f28: Int = 0
+    var f29: Int = 0
+    var f30: Int = 0
+    var f31: Int = 0
+    var f32: Int = 0
+    var f33: Int = 0
+    var f34: Int = 0
+    var f35: Int = 0
+    var f36: Int = 0
+    var f37: Int = 0
+    var f38: Int = 0
+    var f39: Int = 0
+    var f40: Int = 0
+    var f41: Int = 0
+  }
+
+  public enum Action: Equatable { case noop }
+
+  public var body: some Reducer<State, Action> {
+    Reduce { _, _ in .none }
+  }
+}
