@@ -52,6 +52,20 @@ export interface DependencyRef {
 
 export type Dialect = "macro" | "protocol" | "legacy" | "unknown";
 
+export type ReducerRiskKind =
+  | "manyFields"
+  | "manyActions"
+  | "manyChildren"
+  | "deepChain"
+  | "destinationOverflow";
+
+export interface ReducerRisk {
+  kind: ReducerRiskKind;
+  value: number;
+  threshold: number;
+  message: string;
+}
+
 export interface NodeData {
   id: string;
   name: string;
@@ -64,6 +78,12 @@ export interface NodeData {
   state?: StateDecl | null;
   action?: ActionDecl | null;
   dependencies: DependencyRef[];
+  /// Aggregate complexity metric used to size the node visually.
+  complexityScore?: number;
+  /// Maximum modifier-chain depth observed in the body.
+  chainDepthMax?: number;
+  /// Compile-time / architectural risks that this reducer crosses.
+  risks?: ReducerRisk[];
 }
 
 export type EdgeKind = "scope" | "ifLet" | "ifCaseLet" | "forEach" | "combine";
