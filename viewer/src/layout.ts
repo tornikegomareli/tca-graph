@@ -6,13 +6,16 @@ const NODE_WIDTH = 280;
 const NODE_HEIGHT = 200;
 
 /// Map a reducer's complexity score to a node size on the canvas.
-/// Caps growth at +40% so dagre can still lay things out cleanly. The base 280×200
-/// stays as the floor for tiny / scoreless nodes.
+/// Cap at +60% so the heatmap is genuinely scannable — the original +40%/250
+/// curve was so gentle that a 99-score Dashboard was only 12% bigger than
+/// baseline, which most users didn't notice.
+/// The base 280×200 stays as the floor for scoreless nodes.
 function reducerNodeSize(score: number | undefined): { width: number; height: number } {
   const s = Math.max(0, score ?? 0);
-  // Empirical scale: a score of ~250 reaches the cap. Gives a visible gradient on real
-  // codebases (Dashboard scored 99, simpler reducers ~10–30).
-  const boost = Math.min(0.4, s / 250);
+  // A score of ~130 reaches the cap. Real codebases see Dashboard around 99 and
+  // smaller features around 10–30, so this stretches the typical range across most
+  // of the budget instead of compressing it into the bottom 40%.
+  const boost = Math.min(0.6, s / 130);
   return {
     width: Math.round(NODE_WIDTH * (1 + boost)),
     height: Math.round(NODE_HEIGHT * (1 + boost)),
