@@ -27,6 +27,11 @@ struct RawEdge {
   var statePath: String?
   var actionPath: String?
   var location: TCAGraphModel.SourceLocation
+  /// Position of this edge in its modifier chain. The innermost edge is depth 1
+  /// (e.g. `Reduce { }.ifLet(\.x)` → ifLet has depth 1). Stacked modifiers
+  /// (`.ifLet(\.x).ifLet(\.y).forEach(\.z)`) get 1, 2, 3 respectively. Used
+  /// post-walk to compute the reducer's `chainDepthMax`.
+  var chainDepth: Int = 1
 }
 
 public enum DeclarationIndexer {
@@ -755,21 +760,38 @@ final class ReducerVisitor: SyntaxVisitor {
 
     for item in items {
       if let expr = item.item.as(ExprSyntax.self) {
-        emitEdges(from: expr, sourceNodeID: sourceNodeIDGuess)
+        // Pre-count the modifier chain so the outermost modifier knows its full depth.
+        // The recursion then decrements as it walks inward.
+        let depth = max(1, modifierChainLength(of: expr))
+        emitEdges(from: expr, sourceNodeID: sourceNodeIDGuess, chainDepth: depth)
       }
     }
   }
 
-  private func emitEdges(from expr: ExprSyntax, sourceNodeID: String) {
+  /// Count how many stacked `.modifier(...)` calls sit on top of a base reducer in
+  /// `expr`. `Reduce { }.ifLet(...).forEach(...)` returns 2.
+  private func modifierChainLength(of expr: ExprSyntax) -> Int {
+    var n = 0
+    var current: ExprSyntax = expr
+    while let call = current.as(FunctionCallExprSyntax.self),
+          let member = call.calledExpression.as(MemberAccessExprSyntax.self),
+          let base = member.base {
+      n += 1
+      current = base
+    }
+    return n
+  }
+
+  private func emitEdges(from expr: ExprSyntax, sourceNodeID: String, chainDepth: Int) {
     // A chain like `Reduce{}.ifLet(...).forEach(...)` parses as nested function calls
     // whose callee is a MemberAccessExpr. Unchain by walking to the innermost base.
     if let call = expr.as(FunctionCallExprSyntax.self) {
       if let memberAccess = call.calledExpression.as(MemberAccessExprSyntax.self) {
         if let base = memberAccess.base {
-          emitEdges(from: base, sourceNodeID: sourceNodeID)
+          emitEdges(from: base, sourceNodeID: sourceNodeID, chainDepth: chainDepth - 1)
         }
         let name = memberAccess.declName.baseName.text
-        handleModifier(name: name, call: call, sourceNodeID: sourceNodeID)
+        handleModifier(name: name, call: call, sourceNodeID: sourceNodeID, chainDepth: chainDepth)
         return
       }
       if let declRef = call.calledExpression.as(DeclReferenceExprSyntax.self) {
@@ -806,7 +828,7 @@ final class ReducerVisitor: SyntaxVisitor {
     }
   }
 
-  private func handleModifier(name: String, call: FunctionCallExprSyntax, sourceNodeID: String) {
+  private func handleModifier(name: String, call: FunctionCallExprSyntax, sourceNodeID: String, chainDepth: Int) {
     let kind: Edge.Kind
     switch name {
     case "ifLet": kind = .ifLet
@@ -828,7 +850,8 @@ final class ReducerVisitor: SyntaxVisitor {
           presentation: presentation,
           statePath: statePath,
           actionPath: actionPath,
-          location: sourceLocation(for: call.positionAfterSkippingLeadingTrivia)
+          location: sourceLocation(for: call.positionAfterSkippingLeadingTrivia),
+          chainDepth: chainDepth
         )
       )
     }
