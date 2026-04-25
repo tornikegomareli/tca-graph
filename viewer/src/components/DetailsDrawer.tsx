@@ -19,7 +19,7 @@ export function DetailsDrawer({ graph, filteredEdges, node, onClose, onNavigateT
   const mod = moduleStyle(node.moduleId);
   const moduleName = moduleById.get(node.moduleId)?.name ?? node.moduleId;
 
-  const [tab, setTab] = useState<"state" | "actions" | "deps" | "edges">("state");
+  const [tab, setTab] = useState<"state" | "actions" | "deps" | "complexity" | "edges">("state");
 
   return (
     <aside className="drawer">
@@ -55,6 +55,9 @@ export function DetailsDrawer({ graph, filteredEdges, node, onClose, onNavigateT
         <TabButton active={tab === "deps"} onClick={() => setTab("deps")}>
           Deps <span className="dr-tab-count">{node.dependencies.length}</span>
         </TabButton>
+        <TabButton active={tab === "complexity"} onClick={() => setTab("complexity")}>
+          Complexity <span className="dr-tab-count">{node.complexityScore ?? 0}</span>
+        </TabButton>
         <TabButton active={tab === "edges"} onClick={() => setTab("edges")}>
           Graph <span className="dr-tab-count">{neighborhood.incomingEdges.length + neighborhood.outgoingEdges.length}</span>
         </TabButton>
@@ -64,6 +67,12 @@ export function DetailsDrawer({ graph, filteredEdges, node, onClose, onNavigateT
         {tab === "state" && <StateTab node={node} />}
         {tab === "actions" && <ActionsTab node={node} />}
         {tab === "deps" && <DepsTab node={node} />}
+        {tab === "complexity" && (
+          <ComplexityTab
+            node={node}
+            outgoingCount={neighborhood.outgoingEdges.length}
+          />
+        )}
         {tab === "edges" && (
           <EdgesTab
             node={node}
@@ -228,6 +237,64 @@ function DepsTab({ node }: { node: NodeData }) {
         </li>
       ))}
     </ul>
+  );
+}
+
+// ------------------------------------------------------------------
+// Complexity tab (score breakdown + risks)
+// ------------------------------------------------------------------
+
+function ComplexityTab({
+  node, outgoingCount,
+}: { node: NodeData; outgoingCount: number }) {
+  const score = node.complexityScore ?? 0;
+  const fields = node.state?.fields.length ?? 0;
+  const actionCases = node.action?.cases.length ?? 0;
+  const nestedActionCases = (node.action?.nestedEnums ?? []).reduce(
+    (acc, e) => acc + e.cases.length,
+    0
+  );
+  const chainDepth = node.chainDepthMax ?? 0;
+  const risks = node.risks ?? [];
+
+  return (
+    <div>
+      <div className="dr-score">
+        <div className="dr-score-value">{score}</div>
+        <div className="dr-score-label">complexity score</div>
+      </div>
+
+      <div className="dr-subheader" style={{ marginTop: 16 }}>Breakdown</div>
+      <ul className="dr-list">
+        <li><span>Fields</span><span className="dr-muted dr-num">{fields}</span></li>
+        <li><span>Actions</span><span className="dr-muted dr-num">{actionCases}</span></li>
+        {nestedActionCases > 0 && (
+          <li><span>Nested action cases</span><span className="dr-muted dr-num">{nestedActionCases}</span></li>
+        )}
+        <li><span>Children</span><span className="dr-muted dr-num">{outgoingCount}</span></li>
+        <li><span>Max modifier-chain depth</span><span className="dr-muted dr-num">{chainDepth}</span></li>
+      </ul>
+
+      <div className="dr-subheader" style={{ marginTop: 16 }}>
+        Risks {risks.length > 0 && <span className="dr-muted">({risks.length})</span>}
+      </div>
+      {risks.length === 0 ? (
+        <div className="dr-empty">No compile-time risks detected.</div>
+      ) : (
+        <ul className="dr-list">
+          {risks.map((r) => (
+            <li key={r.kind} className="dr-risk-row">
+              <div>
+                <div className="dr-risk-msg">{r.message}</div>
+                <div className="dr-muted dr-risk-meta">
+                  {r.kind} · {r.value}/{r.threshold}
+                </div>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }
 

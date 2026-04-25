@@ -78,6 +78,14 @@ export function ReducerNode({ data }: NodeProps) {
         <div className="rn-title-row">
           <span className="rn-name">{node.name}</span>
           {node.usesBinding && <span className="rn-chip rn-chip-binding" title="Uses BindingReducer">binding</span>}
+          {node.risks && node.risks.length > 0 && (
+            <span
+              className="rn-chip rn-chip-risk"
+              title={`${node.risks.length} compile-time risk${node.risks.length > 1 ? "s" : ""} — see Complexity tab`}
+            >
+              risk{node.risks.length > 1 ? ` ${node.risks.length}` : ""}
+            </span>
+          )}
         </div>
       </div>
 

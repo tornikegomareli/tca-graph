@@ -558,3 +558,33 @@ pre  { font-family: "SF Mono", "Menlo", monospace; font-size: 11px; background: 
   color: var(--muted); background: rgba(255,255,255,0.05);
   padding: 1px 5px; border-radius: 4px;
 }
+
+/* ------------------------ Complexity / risks ------------------------ */
+
+.rn-chip-risk {
+  background: rgba(231, 76, 60, 0.18);
+  color: #ff7a6b;
+  border-color: transparent;
+  font-family: inherit;
+  font-weight: 600;
+}
+
+.dr-score {
+  display: flex; align-items: baseline; gap: 8px;
+  padding: 8px 0;
+}
+.dr-score-value {
+  font-size: 36px; font-weight: 700;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+.dr-score-label {
+  font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;
+  color: var(--muted); font-weight: 600;
+}
+
+.dr-list .dr-num { float: right; font-variant-numeric: tabular-nums; }
+
+.dr-risk-row { padding: 8px 0; }
+.dr-risk-msg { font-size: 12px; color: var(--text); margin-bottom: 2px; }
+.dr-risk-meta { font-size: 11px; font-family: "SF Mono", "Menlo", monospace; }
