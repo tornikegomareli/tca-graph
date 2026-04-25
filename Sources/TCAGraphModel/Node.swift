@@ -99,6 +99,33 @@ public struct DependencyRef: Codable, Equatable, Sendable {
   }
 }
 
+/// A compile-time / architectural risk surfaced for a single reducer.
+///
+/// Each risk represents a metric crossing a known threshold (Destination enum cases,
+/// modifier-chain depth, etc.). Thresholds are research-backed defaults baked into the
+/// parser; the value is the observed count and the message is ready to render in UI.
+public struct ReducerRisk: Codable, Equatable, Sendable {
+  public enum Kind: String, Codable, Sendable {
+    case manyFields
+    case manyActions
+    case manyChildren
+    case deepChain
+    case destinationOverflow
+  }
+
+  public let kind: Kind
+  public let value: Int
+  public let threshold: Int
+  public let message: String
+
+  public init(kind: Kind, value: Int, threshold: Int, message: String) {
+    self.kind = kind
+    self.value = value
+    self.threshold = threshold
+    self.message = message
+  }
+}
+
 public struct Node: Codable, Equatable, Sendable {
   public enum Kind: String, Codable, Sendable {
     case reducer
@@ -122,6 +149,13 @@ public struct Node: Codable, Equatable, Sendable {
   public let state: StateDecl?
   public let action: ActionDecl?
   public let dependencies: [DependencyRef]
+  /// Aggregate complexity score used to size the node visually in the heatmap.
+  /// Empirical formula in the parser; bigger = bigger card.
+  public let complexityScore: Int
+  /// Maximum modifier-chain depth observed in the body, e.g. for
+  /// `Reduce { }.ifLet(...).ifLet(...).forEach(...)` this is 3.
+  public let chainDepthMax: Int
+  public let risks: [ReducerRisk]
 
   public init(
     id: String,
@@ -134,7 +168,10 @@ public struct Node: Codable, Equatable, Sendable {
     usesBinding: Bool = false,
     state: StateDecl? = nil,
     action: ActionDecl? = nil,
-    dependencies: [DependencyRef] = []
+    dependencies: [DependencyRef] = [],
+    complexityScore: Int = 0,
+    chainDepthMax: Int = 0,
+    risks: [ReducerRisk] = []
   ) {
     self.id = id
     self.name = name
@@ -147,5 +184,8 @@ public struct Node: Codable, Equatable, Sendable {
     self.state = state
     self.action = action
     self.dependencies = dependencies
+    self.complexityScore = complexityScore
+    self.chainDepthMax = chainDepthMax
+    self.risks = risks
   }
 }
