@@ -146,6 +146,10 @@ public struct Node: Codable, Equatable, Sendable {
   public let tcaDialect: Dialect
   public let attributes: [String]
   public let usesBinding: Bool
+  /// True when the reducer itself is declared as an enum (`@Reducer enum Destination`).
+  /// Used to scope the destination-overflow risk: a regular reducer with an `enum State`
+  /// would otherwise be flagged the same way, which would be a false positive.
+  public let isEnumReducer: Bool
   public let state: StateDecl?
   public let action: ActionDecl?
   public let dependencies: [DependencyRef]
@@ -166,6 +170,7 @@ public struct Node: Codable, Equatable, Sendable {
     tcaDialect: Dialect = .unknown,
     attributes: [String] = [],
     usesBinding: Bool = false,
+    isEnumReducer: Bool = false,
     state: StateDecl? = nil,
     action: ActionDecl? = nil,
     dependencies: [DependencyRef] = [],
@@ -181,6 +186,7 @@ public struct Node: Codable, Equatable, Sendable {
     self.tcaDialect = tcaDialect
     self.attributes = attributes
     self.usesBinding = usesBinding
+    self.isEnumReducer = isEnumReducer
     self.state = state
     self.action = action
     self.dependencies = dependencies

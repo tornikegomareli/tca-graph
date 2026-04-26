@@ -78,6 +78,10 @@ export interface NodeData {
   state?: StateDecl | null;
   action?: ActionDecl | null;
   dependencies: DependencyRef[];
+  /// True only for `@Reducer enum` declarations (the destination-enum pattern). A
+  /// regular reducer with `enum State` does NOT set this — keeps the
+  /// destination-overflow risk from misfiring.
+  isEnumReducer?: boolean;
   /// Aggregate complexity metric used to size the node visually.
   complexityScore?: number;
   /// Maximum modifier-chain depth observed in the body.

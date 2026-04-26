@@ -27,11 +27,14 @@ struct RawEdge {
   var statePath: String?
   var actionPath: String?
   var location: TCAGraphModel.SourceLocation
-  /// Position of this edge in its modifier chain. The innermost edge is depth 1
-  /// (e.g. `Reduce { }.ifLet(\.x)` → ifLet has depth 1). Stacked modifiers
-  /// (`.ifLet(\.x).ifLet(\.y).forEach(\.z)`) get 1, 2, 3 respectively. Used
-  /// post-walk to compute the reducer's `chainDepthMax`.
-  var chainDepth: Int = 1
+  /// Position of this edge in its modifier chain.
+  /// - Defaults to 0 so edges that aren't part of a modifier chain (e.g. direct
+  ///   `Scope(...)` calls, synthesized `@Reducer enum` case edges) contribute
+  ///   nothing to the reducer's `chainDepthMax`.
+  /// - `handleModifier` sets it to the actual position: a single `.ifLet(...)`
+  ///   on `Reduce { }` is depth 1; stacked `.ifLet(\.x).ifLet(\.y).forEach(\.z)`
+  ///   produce 1, 2, 3 respectively.
+  var chainDepth: Int = 0
 }
 
 public enum DeclarationIndexer {
@@ -172,9 +175,11 @@ public enum DeclarationIndexer {
           message: "Modifier chain depth \(chainDepthMax) — known type-checker pain point past 4."
         ))
       }
-      // Destination-overflow only applies to @Reducer enum patterns. We encode their
-      // cases as state.fields when isEnumReducer = true (kind == .enum here).
-      if node.state?.kind == .enum {
+      // Destination-overflow specifically targets `@Reducer enum` patterns. Checking
+      // `state?.kind == .enum` would also fire on regular reducers that happen to use
+      // an enum-typed State, which would be a false positive. The parser flags real
+      // enum reducers via `isEnumReducer` at buildNode time.
+      if node.isEnumReducer {
         let cases = fields
         if cases > RiskThreshold.destinationOverflow {
           risks.append(ReducerRisk(
@@ -193,6 +198,7 @@ public enum DeclarationIndexer {
         tcaDialect: node.tcaDialect,
         attributes: node.attributes,
         usesBinding: node.usesBinding,
+        isEnumReducer: node.isEnumReducer,
         state: node.state,
         action: node.action,
         dependencies: node.dependencies,
@@ -328,6 +334,7 @@ public enum DeclarationIndexer {
       tcaDialect: node.tcaDialect,
       attributes: node.attributes,
       usesBinding: usesBinding,
+      isEnumReducer: node.isEnumReducer,
       state: state,
       action: action,
       dependencies: deps
@@ -651,6 +658,7 @@ final class ReducerVisitor: SyntaxVisitor {
       tcaDialect: dialect,
       attributes: attributes,
       usesBinding: usesBinding,
+      isEnumReducer: isEnumReducer,
       state: state,
       action: action,
       dependencies: dependencies
