@@ -27,6 +27,14 @@ struct RawEdge {
   var statePath: String?
   var actionPath: String?
   var location: TCAGraphModel.SourceLocation
+  /// Position of this edge in its modifier chain.
+  /// - Defaults to 0 so edges that aren't part of a modifier chain (e.g. direct
+  ///   `Scope(...)` calls, synthesized `@Reducer enum` case edges) contribute
+  ///   nothing to the reducer's `chainDepthMax`.
+  /// - `handleModifier` sets it to the actual position: a single `.ifLet(...)`
+  ///   on `Reduce { }` is depth 1; stacked `.ifLet(\.x).ifLet(\.y).forEach(\.z)`
+  ///   produce 1, 2, 3 respectively.
+  var chainDepth: Int = 0
 }
 
 public enum DeclarationIndexer {
@@ -85,12 +93,120 @@ public enum DeclarationIndexer {
 
     let sharedStorages = aggregateSharedStorages(nodes: nodes)
 
+    // Score every reducer and surface compile-time risks.
+    nodes = scoreNodes(nodes: nodes, edges: edges, rawEdges: rawEdges)
+
     return IndexResult(
       nodes: nodes,
       edges: edges,
       sharedStorages: sharedStorages,
       diagnostics: diagnostics
     )
+  }
+
+  // MARK: - Complexity scoring + risk detection
+
+  /// Research-backed thresholds. Cross any of these and you're in territory where the
+  /// Swift type-checker tends to give up or the codebase becomes hard to reason about.
+  enum RiskThreshold {
+    static let manyFields = 40
+    static let manyActions = 30
+    static let manyChildren = 10
+    static let deepChain = 4
+    static let destinationOverflow = 8
+  }
+
+  /// Walks every Node, computes a complexity score and a list of triggered risks,
+  /// then returns nodes with those fields populated. Pure post-pass — does not touch
+  /// state/action/edges.
+  static func scoreNodes(nodes: [Node], edges: [Edge], rawEdges: [RawEdge]) -> [Node] {
+    // Count outgoing edges per source node.
+    var outgoing: [String: Int] = [:]
+    for e in edges {
+      outgoing[e.sourceId, default: 0] += 1
+    }
+
+    // Largest chain depth ever observed per source node.
+    var depthBySource: [String: Int] = [:]
+    for raw in rawEdges {
+      let depth = raw.chainDepth
+      if let prev = depthBySource[raw.sourceNodeID] {
+        if depth > prev { depthBySource[raw.sourceNodeID] = depth }
+      } else {
+        depthBySource[raw.sourceNodeID] = depth
+      }
+    }
+
+    return nodes.map { node in
+      let fields = node.state?.fields.count ?? 0
+      let actionCases = node.action?.cases.count ?? 0
+      let nestedCases = node.action?.nestedEnums.reduce(0) { $0 + $1.cases.count } ?? 0
+      let actions = actionCases + nestedCases
+      let children = outgoing[node.id] ?? 0
+      let chainDepthMax = depthBySource[node.id] ?? 0
+
+      // Empirical weighting: children and chain depth dominate; field/action counts
+      // contribute linearly. Tunable.
+      let score = fields + actions + children * 2 + chainDepthMax * 3
+
+      var risks: [ReducerRisk] = []
+
+      if fields > RiskThreshold.manyFields {
+        risks.append(ReducerRisk(
+          kind: .manyFields, value: fields, threshold: RiskThreshold.manyFields,
+          message: "State has \(fields) fields — consider splitting."
+        ))
+      }
+      if actions > RiskThreshold.manyActions {
+        risks.append(ReducerRisk(
+          kind: .manyActions, value: actions, threshold: RiskThreshold.manyActions,
+          message: "Action enum exposes \(actions) cases — consider extracting features."
+        ))
+      }
+      if children > RiskThreshold.manyChildren {
+        risks.append(ReducerRisk(
+          kind: .manyChildren, value: children, threshold: RiskThreshold.manyChildren,
+          message: "Reducer composes \(children) children — body is approaching compiler limits."
+        ))
+      }
+      if chainDepthMax > RiskThreshold.deepChain {
+        risks.append(ReducerRisk(
+          kind: .deepChain, value: chainDepthMax, threshold: RiskThreshold.deepChain,
+          message: "Modifier chain depth \(chainDepthMax) — known type-checker pain point past 4."
+        ))
+      }
+      // Destination-overflow specifically targets `@Reducer enum` patterns. Checking
+      // `state?.kind == .enum` would also fire on regular reducers that happen to use
+      // an enum-typed State, which would be a false positive. The parser flags real
+      // enum reducers via `isEnumReducer` at buildNode time.
+      if node.isEnumReducer {
+        let cases = fields
+        if cases > RiskThreshold.destinationOverflow {
+          risks.append(ReducerRisk(
+            kind: .destinationOverflow, value: cases, threshold: RiskThreshold.destinationOverflow,
+            message: "Destination enum has \(cases) cases — compiler typecheck slows past 8."
+          ))
+        }
+      }
+
+      return Node(
+        id: node.id,
+        name: node.name,
+        kind: node.kind,
+        moduleId: node.moduleId,
+        location: node.location,
+        tcaDialect: node.tcaDialect,
+        attributes: node.attributes,
+        usesBinding: node.usesBinding,
+        isEnumReducer: node.isEnumReducer,
+        state: node.state,
+        action: node.action,
+        dependencies: node.dependencies,
+        complexityScore: score,
+        chainDepthMax: chainDepthMax,
+        risks: risks
+      )
+    }
   }
 
   // MARK: - @Shared aggregation
@@ -218,6 +334,7 @@ public enum DeclarationIndexer {
       tcaDialect: node.tcaDialect,
       attributes: node.attributes,
       usesBinding: usesBinding,
+      isEnumReducer: node.isEnumReducer,
       state: state,
       action: action,
       dependencies: deps
@@ -541,6 +658,7 @@ final class ReducerVisitor: SyntaxVisitor {
       tcaDialect: dialect,
       attributes: attributes,
       usesBinding: usesBinding,
+      isEnumReducer: isEnumReducer,
       state: state,
       action: action,
       dependencies: dependencies
@@ -755,21 +873,38 @@ final class ReducerVisitor: SyntaxVisitor {
 
     for item in items {
       if let expr = item.item.as(ExprSyntax.self) {
-        emitEdges(from: expr, sourceNodeID: sourceNodeIDGuess)
+        // Pre-count the modifier chain so the outermost modifier knows its full depth.
+        // The recursion then decrements as it walks inward.
+        let depth = max(1, modifierChainLength(of: expr))
+        emitEdges(from: expr, sourceNodeID: sourceNodeIDGuess, chainDepth: depth)
       }
     }
   }
 
-  private func emitEdges(from expr: ExprSyntax, sourceNodeID: String) {
+  /// Count how many stacked `.modifier(...)` calls sit on top of a base reducer in
+  /// `expr`. `Reduce { }.ifLet(...).forEach(...)` returns 2.
+  private func modifierChainLength(of expr: ExprSyntax) -> Int {
+    var n = 0
+    var current: ExprSyntax = expr
+    while let call = current.as(FunctionCallExprSyntax.self),
+          let member = call.calledExpression.as(MemberAccessExprSyntax.self),
+          let base = member.base {
+      n += 1
+      current = base
+    }
+    return n
+  }
+
+  private func emitEdges(from expr: ExprSyntax, sourceNodeID: String, chainDepth: Int) {
     // A chain like `Reduce{}.ifLet(...).forEach(...)` parses as nested function calls
     // whose callee is a MemberAccessExpr. Unchain by walking to the innermost base.
     if let call = expr.as(FunctionCallExprSyntax.self) {
       if let memberAccess = call.calledExpression.as(MemberAccessExprSyntax.self) {
         if let base = memberAccess.base {
-          emitEdges(from: base, sourceNodeID: sourceNodeID)
+          emitEdges(from: base, sourceNodeID: sourceNodeID, chainDepth: chainDepth - 1)
         }
         let name = memberAccess.declName.baseName.text
-        handleModifier(name: name, call: call, sourceNodeID: sourceNodeID)
+        handleModifier(name: name, call: call, sourceNodeID: sourceNodeID, chainDepth: chainDepth)
         return
       }
       if let declRef = call.calledExpression.as(DeclReferenceExprSyntax.self) {
@@ -806,7 +941,7 @@ final class ReducerVisitor: SyntaxVisitor {
     }
   }
 
-  private func handleModifier(name: String, call: FunctionCallExprSyntax, sourceNodeID: String) {
+  private func handleModifier(name: String, call: FunctionCallExprSyntax, sourceNodeID: String, chainDepth: Int) {
     let kind: Edge.Kind
     switch name {
     case "ifLet": kind = .ifLet
@@ -828,7 +963,8 @@ final class ReducerVisitor: SyntaxVisitor {
           presentation: presentation,
           statePath: statePath,
           actionPath: actionPath,
-          location: sourceLocation(for: call.positionAfterSkippingLeadingTrivia)
+          location: sourceLocation(for: call.positionAfterSkippingLeadingTrivia),
+          chainDepth: chainDepth
         )
       )
     }

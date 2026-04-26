@@ -1,0 +1,37 @@
+import ComposableArchitecture
+
+@Reducer
+public struct ChildA {
+  public struct State: Equatable {}
+  public enum Action: Equatable { case noop }
+  public var body: some Reducer<State, Action> { Reduce { _, _ in .none } }
+}
+
+@Reducer
+public struct DeepChainParent {
+  @ObservableState
+  public struct State: Equatable {
+    var a: ChildA.State?
+    var b: ChildA.State?
+    var c: ChildA.State?
+    var d: ChildA.State?
+    var e: ChildA.State?
+  }
+
+  public enum Action: Equatable {
+    case a(ChildA.Action)
+    case b(ChildA.Action)
+    case c(ChildA.Action)
+    case d(ChildA.Action)
+    case e(ChildA.Action)
+  }
+
+  public var body: some Reducer<State, Action> {
+    Reduce { _, _ in .none }
+      .ifLet(\.a, action: \.a) { ChildA() }
+      .ifLet(\.b, action: \.b) { ChildA() }
+      .ifLet(\.c, action: \.c) { ChildA() }
+      .ifLet(\.d, action: \.d) { ChildA() }
+      .ifLet(\.e, action: \.e) { ChildA() }
+  }
+}

@@ -1,0 +1,21 @@
+import ComposableArchitecture
+
+@Reducer
+public struct LeafA {
+  public struct State: Equatable {}
+  public enum Action: Equatable { case noop }
+  public var body: some Reducer<State, Action> { Reduce { _, _ in .none } }
+}
+
+@Reducer
+public enum BigDestination {
+  case a(LeafA)
+  case b(LeafA)
+  case c(LeafA)
+  case d(LeafA)
+  case e(LeafA)
+  case f(LeafA)
+  case g(LeafA)
+  case h(LeafA)
+  case i(LeafA)
+}
