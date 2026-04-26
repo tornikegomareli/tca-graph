@@ -176,7 +176,7 @@ struct CLI {
 
     let iso = ISO8601DateFormatter()
     let graph = Graph(
-      generator: GeneratorInfo(name: "tca-graph", version: "0.2.0"),
+      generator: GeneratorInfo(name: "tca-graph", version: "0.3.0"),
       generatedAt: iso.string(from: Date()),
       source: Source(
         rootPath: rootURL.path,
