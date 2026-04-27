@@ -1,6 +1,7 @@
 import Foundation
 import TCAGraphModel
 import TCAGraphParser
+import TCAGraphLinter
 
 @main
 struct CLI {
@@ -16,6 +17,10 @@ struct CLI {
       runAnalyze(positional: Array(args.dropFirst(2)))
     case "serve":
       runServe(positional: Array(args.dropFirst(2)))
+    case "check":
+      runCheck(positional: Array(args.dropFirst(2)))
+    case "init-budgets":
+      runInitBudgets(positional: Array(args.dropFirst(2)))
     default:
       printUsage()
       exit(1)
@@ -222,11 +227,15 @@ struct CLI {
     Usage:
       tca-graph serve <path> [-p <port>] [--no-open] [--viewer <dist-path>]
       tca-graph analyze <path> [-o <file>]
+      tca-graph check <path> [--config <file>] [--format text|xcode|github|json]
+      tca-graph init-budgets <path> [--force]
 
     Examples:
       tca-graph serve ~/Code/MyApp
-      tca-graph serve . --port 9000 --no-open
       tca-graph analyze . -o graph.json
+      tca-graph check . --format xcode      # for Run Script Build Phase
+      tca-graph check . --format github     # for GitHub Actions
+      tca-graph init-budgets .              # snapshot current state to .tca-graph.yml
 
     """
     FileHandle.standardError.write(Data(msg.utf8))
