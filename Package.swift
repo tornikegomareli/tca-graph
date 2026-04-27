@@ -11,6 +11,7 @@ let package = Package(
   ],
   dependencies: [
     .package(url: "https://github.com/swiftlang/swift-syntax.git", from: "600.0.0"),
+    .package(url: "https://github.com/jpsim/Yams.git", from: "5.0.0"),
   ],
   targets: [
     .target(name: "TCAGraphModel"),
@@ -22,13 +23,26 @@ let package = Package(
         .product(name: "SwiftParser", package: "swift-syntax"),
       ]
     ),
+    .target(
+      name: "TCAGraphLinter",
+      dependencies: [
+        "TCAGraphModel",
+        "TCAGraphParser",
+        "Yams",
+      ]
+    ),
     .executableTarget(
       name: "TCAGraphCLI",
-      dependencies: ["TCAGraphParser", "TCAGraphModel"]
+      dependencies: ["TCAGraphParser", "TCAGraphLinter", "TCAGraphModel"]
     ),
     .testTarget(
       name: "TCAGraphParserTests",
       dependencies: ["TCAGraphParser", "TCAGraphModel"],
+      resources: [.copy("Fixtures")]
+    ),
+    .testTarget(
+      name: "TCAGraphLinterTests",
+      dependencies: ["TCAGraphLinter", "TCAGraphParser", "TCAGraphModel"],
       resources: [.copy("Fixtures")]
     ),
   ]
