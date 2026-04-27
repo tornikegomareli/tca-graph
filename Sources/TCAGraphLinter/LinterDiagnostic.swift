@@ -19,13 +19,23 @@ public struct LinterDiagnostic: Codable, Equatable, Sendable {
     // Pure graph analyses, new in 0.4.0.
     case cycle
     case mutualPresentation
+    // Parser diagnostics surfaced through the linter so they fail `check` and
+    // show up inline in Xcode / GitHub formats. Without these, an analysis run
+    // that hit a parse error or unresolved reference would silently produce a
+    // partial graph and the linter would lint that partial graph as if it were
+    // complete.
+    case parseError
+    case unresolvedReference
+    case ambiguousReference
 
     /// Default severity when the user hasn't overridden in `.tca-graph.yml`.
     public var defaultSeverity: Severity {
       switch self {
       case .cycle, .mutualPresentation, .destinationOverflow: return .error
       case .deepChain: return .error
+      case .parseError: return .error
       case .manyFields, .manyActions, .manyChildren: return .warning
+      case .unresolvedReference, .ambiguousReference: return .warning
       }
     }
   }

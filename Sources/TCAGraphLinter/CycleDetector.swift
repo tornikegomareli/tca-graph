@@ -4,12 +4,21 @@ import TCAGraphModel
 /// Pure graph analyses over a `Graph`'s edge list. No I/O, no SwiftSyntax.
 public enum CycleDetector {
 
-  /// Detect any cycles in the reducer composition graph. Returns each cycle as a list
-  /// of node IDs in traversal order (the first node is repeated only once at the start).
+  /// Detect every simple cycle in the reducer composition graph. Returns each cycle
+  /// as a list of node IDs in traversal order (no node repeated; the start ID
+  /// appears once at index 0).
   ///
   /// Reducer trees in TCA are supposed to be DAGs — cycles indicate either a bug
   /// (the parser couldn't disambiguate a same-named child) or a real architectural
   /// problem (rare but possible via case-paths and shared destination enums).
+  ///
+  /// Algorithm: for each candidate anchor node A, run DFS from A only following
+  /// edges whose targets are >= A in lexicographic id order. When the DFS reaches
+  /// A again, the path is a simple cycle whose smallest node is A — guaranteeing
+  /// every simple cycle is reported exactly once at the anchor that's its smallest
+  /// node, and overlapping cycles through shared nodes are all enumerated. This
+  /// avoids the classic "blacken once" pitfall of basic 3-color DFS, which would
+  /// drop the second cycle through any shared node.
   public static func cycles(in nodes: [Node], edges: [Edge]) -> [[String]] {
     let nodeIDs = Set(nodes.map(\.id))
     var adjacency: [String: [String]] = [:]
@@ -17,20 +26,24 @@ public enum CycleDetector {
       adjacency[edge.sourceId, default: []].append(edge.targetId)
     }
 
-    var color: [String: Color] = [:]      // unvisited → gray (on stack) → black (done)
-    var path: [String] = []
-    var cycles: [[String]] = []
-    // Use a Set of cycles by canonical key to dedupe; same cycle reachable from
-    // multiple roots otherwise gets reported multiple times.
-    var seen = Set<String>()
+    var allCycles: [[String]] = []
+    var seenKeys = Set<String>()
 
-    for nodeId in nodes.map(\.id) {
-      if color[nodeId] != .black {
-        dfs(from: nodeId, adjacency: adjacency, color: &color, path: &path, cycles: &cycles, seen: &seen)
-      }
+    for anchor in nodes.map(\.id) {
+      var path: [String] = [anchor]
+      var onPath: Set<String> = [anchor]
+      enumerate(
+        anchor: anchor,
+        current: anchor,
+        adjacency: adjacency,
+        path: &path,
+        onPath: &onPath,
+        cycles: &allCycles,
+        seen: &seenKeys
+      )
     }
 
-    return cycles
+    return allCycles
   }
 
   /// Detect mutual presentations: pairs of reducers that present each other modally.
@@ -59,37 +72,51 @@ public enum CycleDetector {
 
   // MARK: - Private
 
-  private enum Color { case gray, black }
-
-  private static func dfs(
-    from start: String,
+  /// DFS from a fixed anchor node. Records a cycle each time we re-enter the
+  /// anchor; otherwise descends into neighbors that satisfy the lex-anchor
+  /// constraint (`next >= anchor`). Critically does NOT mark nodes globally
+  /// visited — a node can participate in multiple cycles and each must be
+  /// reachable through this anchor's DFS.
+  private static func enumerate(
+    anchor: String,
+    current: String,
     adjacency: [String: [String]],
-    color: inout [String: Color],
     path: inout [String],
+    onPath: inout Set<String>,
     cycles: inout [[String]],
     seen: inout Set<String>
   ) {
-    color[start] = .gray
-    path.append(start)
-    for next in adjacency[start] ?? [] {
-      switch color[next] {
-      case .gray:
-        // Found a back-edge — extract the cycle from the path.
-        if let startIdx = path.firstIndex(of: next) {
-          let cycle = Array(path[startIdx...])
-          let key = canonicalCycleKey(cycle)
-          if seen.insert(key).inserted {
-            cycles.append(cycle)
-          }
+    for next in adjacency[current] ?? [] {
+      if next == anchor {
+        // Found a simple cycle anchored at `anchor`.
+        let key = canonicalCycleKey(path)
+        if seen.insert(key).inserted {
+          cycles.append(path)
         }
-      case .black:
         continue
-      case .none:
-        dfs(from: next, adjacency: adjacency, color: &color, path: &path, cycles: &cycles, seen: &seen)
       }
+      // Restrict to cycles whose smallest node is `anchor`. Skipping nodes
+      // smaller than the anchor means each simple cycle is enumerated exactly
+      // once (at the anchor equal to its lex-min node).
+      if next < anchor { continue }
+      // Avoid revisiting nodes already on the current DFS path — that would
+      // mean a non-simple cycle (loop containing a smaller cycle).
+      if onPath.contains(next) { continue }
+
+      path.append(next)
+      onPath.insert(next)
+      enumerate(
+        anchor: anchor,
+        current: next,
+        adjacency: adjacency,
+        path: &path,
+        onPath: &onPath,
+        cycles: &cycles,
+        seen: &seen
+      )
+      path.removeLast()
+      onPath.remove(next)
     }
-    path.removeLast()
-    color[start] = .black
   }
 
   /// Canonical key for cycle deduplication — rotates so the lexicographically smallest

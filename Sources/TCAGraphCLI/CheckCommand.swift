@@ -34,10 +34,22 @@ extension CLI {
 
     let rootURL = URL(fileURLWithPath: rootPath).standardizedFileURL
 
-    let configURL: URL? = {
-      if let configPath { return URL(fileURLWithPath: configPath).standardizedFileURL }
-      return LinterConfig.defaultConfigURL(in: rootURL)
-    }()
+    // Resolve the config URL. Auto-discovery (`.tca-graph.yml` at root) silently
+    // falls back to defaults when not found, but an *explicit* `--config` must
+    // exist — otherwise a typo silently weakens or strengthens enforcement.
+    let configURL: URL?
+    if let configPath {
+      let explicit = URL(fileURLWithPath: configPath).standardizedFileURL
+      guard FileManager.default.fileExists(atPath: explicit.path) else {
+        FileHandle.standardError.write(
+          Data("Config file not found: \(explicit.path)\n".utf8)
+        )
+        exit(1)
+      }
+      configURL = explicit
+    } else {
+      configURL = LinterConfig.defaultConfigURL(in: rootURL)
+    }
 
     let config: LinterConfig
     do {

@@ -28,6 +28,12 @@ public enum Linter {
     var diagnostics: [LinterDiagnostic] = []
     let nodesByID = Dictionary(uniqueKeysWithValues: graph.nodes.map { ($0.id, $0) })
 
+    // 0. Surface parser diagnostics so a partial / broken analysis can't silently
+    //    pass `check`. Without this, an unresolved-child diagnostic would mean a
+    //    missing edge, and the linter would happily report "no cycles" because
+    //    it never saw the edge that would have closed the loop.
+    diagnostics.append(contentsOf: parserDiagnostics(graph.diagnostics, config: config))
+
     // 1. Budget breaches surfaced from per-reducer metrics. Re-evaluate against
     //    the user's configured budgets so a tightened `.tca-graph.yml` still fires.
     var outgoingCount: [String: Int] = [:]
@@ -150,4 +156,35 @@ public enum Linter {
   }
 
   private static let unknownLocation = SourceLocation(file: "<unknown>", line: 0, column: 0)
+
+  /// Map parser-level Diagnostic records into LinterDiagnostic so they share the
+  /// formatter pipeline and CI exit code. parseError is fatal by default;
+  /// unresolved/ambiguous references are warnings (non-fatal but visible).
+  private static func parserDiagnostics(
+    _ raw: [Diagnostic],
+    config: LinterConfig
+  ) -> [LinterDiagnostic] {
+    raw.compactMap { d in
+      let rule: LinterDiagnostic.Rule
+      switch d.kind {
+      case .parseError:
+        rule = .parseError
+      case .unresolvedChild:
+        rule = .unresolvedReference
+      case .ambiguousReference:
+        rule = .ambiguousReference
+      case .unknownBodyElement:
+        // Best mapped as a warning under unresolvedReference — same shape:
+        // "we couldn't fully understand this part of the body."
+        rule = .unresolvedReference
+      }
+      return LinterDiagnostic(
+        rule: rule,
+        severity: config.severity(for: rule),
+        message: d.message,
+        nodeId: nil,
+        location: d.location ?? unknownLocation
+      )
+    }
+  }
 }

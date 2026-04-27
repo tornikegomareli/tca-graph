@@ -47,6 +47,29 @@ final class CycleDetectorTests: XCTestCase {
     XCTAssertEqual(cycles.count, 1)
   }
 
+  func testReportsOverlappingCyclesThroughSharedNode() {
+    // Two distinct simple cycles both passing through A and C:
+    //   1. A → B → C → A
+    //   2. A → C → A
+    // The naive 3-color DFS would mark A (or C) black after the first and miss
+    // the second. The lex-anchor enumeration finds both.
+    let nodes = [n("A"), n("B"), n("C")]
+    let edges = [e("A", "B"), e("B", "C"), e("C", "A"), e("A", "C")]
+    let cycles = CycleDetector.cycles(in: nodes, edges: edges)
+    XCTAssertEqual(cycles.count, 2, "Got \(cycles)")
+    let cycleSets = cycles.map(Set.init)
+    XCTAssertTrue(cycleSets.contains(["A", "B", "C"]))
+    XCTAssertTrue(cycleSets.contains(["A", "C"]))
+  }
+
+  func testReportsTwoIndependentCycles() {
+    // A↔B and C↔D — two independent cycles, both should appear.
+    let nodes = [n("A"), n("B"), n("C"), n("D")]
+    let edges = [e("A", "B"), e("B", "A"), e("C", "D"), e("D", "C")]
+    let cycles = CycleDetector.cycles(in: nodes, edges: edges)
+    XCTAssertEqual(cycles.count, 2)
+  }
+
   // MARK: - Mutual presentation
 
   func testNoMutualPresentationOnNonPresentationEdges() {

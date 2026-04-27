@@ -148,6 +148,9 @@ public struct LinterConfig: Equatable, Sendable {
     case "destination_overflow": return .destinationOverflow
     case "cycle": return .cycle
     case "mutual_presentation": return .mutualPresentation
+    case "parse_error": return .parseError
+    case "unresolved_reference": return .unresolvedReference
+    case "ambiguous_reference": return .ambiguousReference
     default: return nil
     }
   }
@@ -162,6 +165,9 @@ public struct LinterConfig: Equatable, Sendable {
     case .destinationOverflow: return "destination_overflow"
     case .cycle: return "cycle"
     case .mutualPresentation: return "mutual_presentation"
+    case .parseError: return "parse_error"
+    case .unresolvedReference: return "unresolved_reference"
+    case .ambiguousReference: return "ambiguous_reference"
     }
   }
 }
