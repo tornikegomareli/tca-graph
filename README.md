@@ -10,6 +10,7 @@
 [![macOS 13+ arm64](https://img.shields.io/badge/macOS-13%2B%20arm64-007AFF.svg?style=flat&logo=apple&logoColor=white)](https://www.apple.com/macos/)
 [![SPM](https://img.shields.io/badge/Swift_Package_Manager-compatible-E8E2D6.svg?style=flat)](https://swift.org/package-manager/)
 [![Homebrew](https://img.shields.io/badge/Homebrew-tornikegomareli%2Ftca--graph-FBB040.svg?style=flat&logo=homebrew&logoColor=white)](https://github.com/tornikegomareli/homebrew-tca-graph)
+[![License: MIT](https://img.shields.io/badge/License-MIT-A78BFA.svg?style=flat)](LICENSE)
 
 CLI + interactive web viewer for Swift codebases that use [The Composable Architecture](https://github.com/pointfreeco/swift-composable-architecture). Walks the source with SwiftSyntax, renders the reducer composition and your shared state as a graph.
 
@@ -162,4 +163,4 @@ fi
 
 ## License
 
-TBD before 1.0.
+[MIT](LICENSE)
