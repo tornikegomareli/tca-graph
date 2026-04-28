@@ -33,7 +33,14 @@ let package = Package(
     ),
     .executableTarget(
       name: "TCAGraphCLI",
-      dependencies: ["TCAGraphParser", "TCAGraphLinter", "TCAGraphModel"]
+      dependencies: ["TCAGraphParser", "TCAGraphLinter", "TCAGraphModel"],
+      resources: [
+        // The built viewer is embedded as an SPM resource so `swift build`
+        // (and `mint install`) produce a self-contained binary without
+        // requiring a separate npm step at install time. The dev workflow
+        // refreshes this directory via `npm run build` in viewer/.
+        .copy("Resources/Viewer"),
+      ]
     ),
     .testTarget(
       name: "TCAGraphParserTests",

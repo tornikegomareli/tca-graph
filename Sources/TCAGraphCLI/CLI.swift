@@ -203,11 +203,26 @@ struct CLI {
   static func findViewerDist(override: String?) -> URL? {
     let fm = FileManager.default
     var candidates: [URL] = []
+
+    // Highest priority: explicit `--viewer` override wins.
     if let override {
       candidates.append(URL(fileURLWithPath: override).standardizedFileURL)
     }
-    candidates.append(URL(fileURLWithPath: "viewer/dist").standardizedFileURL)
+
+    // SPM-bundled resource. This is what makes `swift build` / `mint install`
+    // produce a self-contained binary — the viewer is copied into the target's
+    // resource bundle at build time.
+    if let bundled = Bundle.module.url(forResource: "Viewer", withExtension: nil) {
+      candidates.append(bundled)
+    }
+
+    // Conventional Homebrew layout when the binary is installed under a prefix
+    // (e.g. /opt/homebrew/bin/tca-graph + /opt/homebrew/share/tca-graph/viewer/).
     let binURL = URL(fileURLWithPath: CommandLine.arguments[0]).deletingLastPathComponent()
+    candidates.append(binURL.appendingPathComponent("../share/tca-graph/viewer").standardizedFileURL)
+
+    // Dev-time fallbacks for working from inside the repo.
+    candidates.append(URL(fileURLWithPath: "viewer/dist").standardizedFileURL)
     candidates.append(binURL.appendingPathComponent("../viewer/dist").standardizedFileURL)
     candidates.append(binURL.appendingPathComponent("../../viewer/dist").standardizedFileURL)
     candidates.append(binURL.appendingPathComponent("viewer/dist").standardizedFileURL)
