@@ -181,7 +181,7 @@ struct CLI {
 
     let iso = ISO8601DateFormatter()
     let graph = Graph(
-      generator: GeneratorInfo(name: "tca-graph", version: "0.5.0"),
+      generator: GeneratorInfo(name: "tca-graph", version: "0.5.1"),
       generatedAt: iso.string(from: Date()),
       source: Source(
         rootPath: rootURL.path,
@@ -209,23 +209,39 @@ struct CLI {
       candidates.append(URL(fileURLWithPath: override).standardizedFileURL)
     }
 
-    // SPM-bundled resource. This is what makes `swift build` / `mint install`
-    // produce a self-contained binary — the viewer is copied into the target's
-    // resource bundle at build time.
-    if let bundled = Bundle.module.url(forResource: "Viewer", withExtension: nil) {
-      candidates.append(bundled)
+    // The SPM-bundled viewer is placed at `<binary-dir>/tca-graph_TCAGraphCLI.bundle/Viewer/`
+    // by `swift build`. We deliberately do NOT use `Bundle.module` here: its synthesized
+    // accessor is a `fatalError`-on-miss `lazy let`, which would crash the process when
+    // the bundle isn't found (e.g. a relocated install) before `findViewerDist` could
+    // fall through to its other candidates.
+    //
+    // Resolve the binary path through any symlink chain so we look next to the *real*
+    // install location, not next to a Homebrew-style symlink (Homebrew links
+    // `bin/tca-graph` to `../Cellar/.../bin/tca-graph`; the resource bundle lives
+    // alongside the real binary, not the symlink).
+    let argvBinURL = URL(fileURLWithPath: CommandLine.arguments[0])
+    let realBinURL = argvBinURL.resolvingSymlinksInPath()
+    let realBinDir = realBinURL.deletingLastPathComponent()
+    let argvBinDir = argvBinURL.deletingLastPathComponent()
+
+    func appendCandidatesUnder(_ binDir: URL) {
+      // SPM resource bundle (built by `swift build`).
+      candidates.append(binDir.appendingPathComponent("tca-graph_TCAGraphCLI.bundle/Viewer").standardizedFileURL)
+      // Homebrew-style share fallback.
+      candidates.append(binDir.appendingPathComponent("../share/tca-graph/viewer").standardizedFileURL)
+      // Dev-time relative fallbacks for working from inside the repo.
+      candidates.append(binDir.appendingPathComponent("../viewer/dist").standardizedFileURL)
+      candidates.append(binDir.appendingPathComponent("../../viewer/dist").standardizedFileURL)
+      candidates.append(binDir.appendingPathComponent("viewer/dist").standardizedFileURL)
     }
 
-    // Conventional Homebrew layout when the binary is installed under a prefix
-    // (e.g. /opt/homebrew/bin/tca-graph + /opt/homebrew/share/tca-graph/viewer/).
-    let binURL = URL(fileURLWithPath: CommandLine.arguments[0]).deletingLastPathComponent()
-    candidates.append(binURL.appendingPathComponent("../share/tca-graph/viewer").standardizedFileURL)
+    appendCandidatesUnder(realBinDir)
+    if argvBinDir != realBinDir {
+      appendCandidatesUnder(argvBinDir)
+    }
 
-    // Dev-time fallbacks for working from inside the repo.
+    // Last-resort dev fallback: relative to the current working directory.
     candidates.append(URL(fileURLWithPath: "viewer/dist").standardizedFileURL)
-    candidates.append(binURL.appendingPathComponent("../viewer/dist").standardizedFileURL)
-    candidates.append(binURL.appendingPathComponent("../../viewer/dist").standardizedFileURL)
-    candidates.append(binURL.appendingPathComponent("viewer/dist").standardizedFileURL)
 
     for c in candidates {
       if fm.fileExists(atPath: c.appendingPathComponent("index.html").path) {
