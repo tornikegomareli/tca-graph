@@ -1,0 +1,78 @@
+name: release
+
+on:
+  push:
+    tags:
+      - "[0-9]+.[0-9]+.[0-9]+"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to (re)build the release artifacts for"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build macOS arm64 tarball
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+
+      - name: Resolve version
+        id: ver
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo "version=${{ github.event.inputs.tag }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Build viewer
+        working-directory: viewer
+        run: |
+          npm install
+          npm run build
+
+      - name: Build Swift binary (release, arm64)
+        run: swift build -c release --arch arm64
+
+      - name: Stage tarball layout
+        run: |
+          set -euo pipefail
+          VERSION="${{ steps.ver.outputs.version }}"
+          STAGE="tca-graph-${VERSION}-macos-arm64"
+          mkdir -p "${STAGE}/bin" "${STAGE}/share/tca-graph"
+          cp .build/arm64-apple-macosx/release/tca-graph "${STAGE}/bin/"
+          # Bundle.module location — alongside the binary so the bundled-viewer
+          # resource is found at runtime without depending on the Homebrew layout.
+          if [ -d ".build/arm64-apple-macosx/release/tca-graph_TCAGraphCLI.bundle" ]; then
+            cp -R .build/arm64-apple-macosx/release/tca-graph_TCAGraphCLI.bundle "${STAGE}/bin/"
+          fi
+          # Conventional Homebrew-style share/ path as a redundant fallback so
+          # users who manually relocate the binary can still find the viewer.
+          cp -R viewer/dist "${STAGE}/share/tca-graph/viewer"
+          # Ad-hoc sign so Gatekeeper doesn't kill the binary on first run for
+          # users who download via curl.
+          codesign --force --deep --sign - "${STAGE}/bin/tca-graph" || true
+          tar czf "tca-graph-${VERSION}-macos-arm64.tar.gz" "${STAGE}"
+          shasum -a 256 "tca-graph-${VERSION}-macos-arm64.tar.gz" | tee "tca-graph-${VERSION}-macos-arm64.tar.gz.sha256"
+          ls -la
+
+      - name: Upload tarball to release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.ver.outputs.version }}
+          files: |
+            tca-graph-${{ steps.ver.outputs.version }}-macos-arm64.tar.gz
+            tca-graph-${{ steps.ver.outputs.version }}-macos-arm64.tar.gz.sha256
+          fail_on_unmatched_files: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
