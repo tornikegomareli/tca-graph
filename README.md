@@ -15,8 +15,8 @@
 CLI + interactive web viewer for Swift codebases that use [The Composable Architecture](https://github.com/pointfreeco/swift-composable-architecture). Walks the source with SwiftSyntax, renders the reducer composition and your shared state as a graph.
 
 ```bash
-tca-graph serve ~/Code/MyApp        # explore the graph in your browser
-tca-graph check ~/Code/MyApp        # lint architecture, fails CI on budget violations
+tca-graph serve       # explore the graph in your browser
+tca-graph check       # lint architecture, fails CI on budget violations
 ```
 
 ## Install
