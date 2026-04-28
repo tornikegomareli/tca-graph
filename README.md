@@ -1,10 +1,9 @@
 # tca-graph
 
-**See your TCA architecture. Lint it like SwiftLint.**
+**Visualise your TCA architecture as graph and Lint it.**
 
-<!-- Drag a screenshot here; GitHub will upload it to user-attachments and replace this line. -->
+<img width="800" height="466" alt="demotrca" src="https://github.com/user-attachments/assets/fa662abf-6e9b-4214-a394-2823c68c56d3" />
 
-<img width="800" height="466" alt="CleanShot 2026-04-28 at 10 19 36" src="https://github.com/user-attachments/assets/61d65ea7-4d38-42a7-8c90-26e22737aab7" />
 
 [![Release](https://img.shields.io/github/v/release/tornikegomareli/tca-graph)](https://github.com/tornikegomareli/tca-graph/releases/latest)
 [![Swift 5.10+](https://img.shields.io/badge/Swift-5.10+-F05138.svg?style=flat&logo=swift&logoColor=white)](https://swift.org)
