@@ -10,6 +10,11 @@ viewer/node_modules/
 viewer/dist/
 viewer/public/graph.json
 
+# Sources/TCAGraphCLI/Resources/Viewer is committed: `npm run build` mirrors
+# viewer/dist into it, and SPM bundles it as a resource so `swift build`
+# (and `mint install`) produce a self-contained binary with the web UI baked
+# in. Refresh by running `npm run build` in viewer/.
+
 # macOS
 .DS_Store
 
