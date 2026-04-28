@@ -75,7 +75,9 @@ struct CLI {
 
   static func runServe(positional: [String]) {
     var port: UInt16 = 8765
-    var rootPath: String?
+    // Default to the current working directory so `cd ~/Code/MyTCAProject && tca-graph serve`
+    // just works — no positional path required.
+    var rootPath = "."
     var autoOpen = true
     var staticRootOverride: String?
 
@@ -101,7 +103,7 @@ struct CLI {
         i += 2
         continue
       }
-      if !a.hasPrefix("-") && rootPath == nil { rootPath = a }
+      if !a.hasPrefix("-") { rootPath = a }
       i += 1
     }
 
@@ -116,17 +118,9 @@ struct CLI {
     }
 
     // Produce the graph JSON in memory so the viewer fetches the fresh analysis.
-    let graphJSON: Data?
-    if let rootPath {
-      let rootURL = URL(fileURLWithPath: rootPath).standardizedFileURL
-      FileHandle.standardError.write(Data("Analyzing \(rootURL.path)\n".utf8))
-      graphJSON = buildGraphJSON(rootURL: rootURL)
-    } else {
-      graphJSON = nil
-      FileHandle.standardError.write(
-        Data("No path provided — serving without a graph. Pass a path like: tca-graph serve <path>\n".utf8)
-      )
-    }
+    let rootURL = URL(fileURLWithPath: rootPath).standardizedFileURL
+    FileHandle.standardError.write(Data("Analyzing \(rootURL.path)\n".utf8))
+    let graphJSON = buildGraphJSON(rootURL: rootURL)
 
     let helper: LocalHelper
     do {
@@ -181,7 +175,7 @@ struct CLI {
 
     let iso = ISO8601DateFormatter()
     let graph = Graph(
-      generator: GeneratorInfo(name: "tca-graph", version: "0.5.2"),
+      generator: GeneratorInfo(name: "tca-graph", version: "0.5.3"),
       generatedAt: iso.string(from: Date()),
       source: Source(
         rootPath: rootURL.path,
@@ -261,17 +255,21 @@ struct CLI {
     tca-graph — analyze a TCA Swift codebase and visualize it.
 
     Usage:
-      tca-graph serve <path> [-p <port>] [--no-open] [--viewer <dist-path>]
-      tca-graph analyze <path> [-o <file>]
-      tca-graph check <path> [--config <file>] [--format text|xcode|github|json]
-      tca-graph init-budgets <path> [--force]
+      tca-graph serve [<path>] [-p <port>] [--no-open] [--viewer <dist-path>]
+      tca-graph analyze [<path>] [-o <file>]
+      tca-graph check [<path>] [--config <file>] [--format text|xcode|github|json]
+      tca-graph init-budgets [<path>] [--force]
+
+    All path arguments default to the current directory, so running any subcommand
+    from inside a TCA project root is the common case.
 
     Examples:
-      tca-graph serve ~/Code/MyApp
+      cd ~/Code/MyApp && tca-graph serve     # most common
+      tca-graph serve ~/Code/MyApp           # from anywhere
       tca-graph analyze . -o graph.json
-      tca-graph check . --format xcode      # for Run Script Build Phase
-      tca-graph check . --format github     # for GitHub Actions
-      tca-graph init-budgets .              # snapshot current state to .tca-graph.yml
+      tca-graph check . --format xcode       # for Run Script Build Phase
+      tca-graph check . --format github      # for GitHub Actions
+      tca-graph init-budgets                 # snapshot cwd into .tca-graph.yml
 
     """
     FileHandle.standardError.write(Data(msg.utf8))
