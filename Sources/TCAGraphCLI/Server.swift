@@ -131,7 +131,7 @@ final class LocalHelper {
   private func route(_ req: HTTPRequest) -> HTTPResponse {
     switch (req.method, req.path) {
     case ("GET", "/health"):
-      return .json(200, "OK", ["status": "ok", "version": "0.3.0"])
+      return .json(200, "OK", ["status": "ok", "version": "0.4.0"])
     case ("GET", "/graph.json"):
       // Explicit 404 when no graph is loaded, otherwise the static-file fallback below
       // would SPA-serve index.html and the viewer would try to parse HTML as JSON.
