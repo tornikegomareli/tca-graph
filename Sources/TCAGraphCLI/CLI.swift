@@ -175,7 +175,7 @@ struct CLI {
 
     let iso = ISO8601DateFormatter()
     let graph = Graph(
-      generator: GeneratorInfo(name: "tca-graph", version: "0.5.3"),
+      generator: GeneratorInfo(name: "tca-graph", version: "0.5.4"),
       generatedAt: iso.string(from: Date()),
       source: Source(
         rootPath: rootURL.path,
@@ -285,10 +285,13 @@ struct CLI {
     process.standardError = Pipe()
     do {
       try process.run()
-      process.waitUntilExit()
     } catch { return nil }
-    guard process.terminationStatus == 0 else { return nil }
+    // Drain the pipe before waiting for the child — same pipe-deadlock pattern
+    // as PackageDiscovery.dumpPackage. `git rev-parse` output is tiny so we'd
+    // never hit the buffer in practice, but ordering matters for correctness.
     let data = pipe.fileHandleForReading.readDataToEndOfFile()
+    process.waitUntilExit()
+    guard process.terminationStatus == 0 else { return nil }
     let s = String(data: data, encoding: .utf8) ?? ""
     return s.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
   }

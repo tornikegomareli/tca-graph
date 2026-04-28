@@ -151,11 +151,25 @@ public enum PackageDiscovery {
     process.standardError = errPipe
 
     try process.run()
+
+    // CRITICAL: drain the pipes before `waitUntilExit`.
+    //
+    // macOS pipe buffers are ~64 KB. When the child writes more than that to stdout
+    // and nothing is reading the parent end, the write blocks. If we then call
+    // `waitUntilExit` before reading, both processes deadlock — child can't write,
+    // parent can't move on. `dump-package` output for a moderately large workspace
+    // (e.g. isowords' root Package.swift) easily blows past 64 KB.
+    //
+    // `readDataToEndOfFile` blocks until the pipe is closed by the child (which
+    // happens at exit), so the child can flush freely while the parent is reading.
+    // After the read finishes the child is gone, so `waitUntilExit` returns
+    // immediately.
+    let data = outPipe.fileHandleForReading.readDataToEndOfFile()
+    let errData = errPipe.fileHandleForReading.readDataToEndOfFile()
     process.waitUntilExit()
 
-    let data = outPipe.fileHandleForReading.readDataToEndOfFile()
     guard process.terminationStatus == 0 else {
-      let err = String(data: errPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+      let err = String(data: errData, encoding: .utf8) ?? ""
       throw NSError(
         domain: "tca-graph.dump-package",
         code: Int(process.terminationStatus),
