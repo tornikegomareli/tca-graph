@@ -19,17 +19,48 @@ No Xcode project required, no compilation step. SwiftSyntax-only analysis runs i
 
 **An architectural-budget linter.** `tca-graph check` walks the graph and emits diagnostics when reducers cross size thresholds (too many fields / actions / children, modifier-chain depth past 4, Destination enums past 8 cases) or when the graph itself violates rules (cycles, mutual modal presentations). Outputs render as Xcode warnings/errors when wired into a Run Script Build Phase, or as PR annotations under GitHub Actions.
 
-## Install from source
+## Install
 
-Requires macOS 13+, Swift 5.10+, and Node 18+ for the viewer build.
+macOS 13+ on Apple Silicon (arm64). Pick whichever fits your workflow.
+
+### Homebrew
+
+```bash
+brew tap tornikegomareli/tca-graph
+brew install tca-graph
+```
+
+### Curl one-liner
+
+```bash
+curl -sSL https://raw.githubusercontent.com/tornikegomareli/tca-graph/main/install.sh | bash
+```
+
+Installs into `~/.local/bin` by default; pass `--prefix /usr/local` (with `sudo`) to install system-wide. The script verifies the SHA-256 checksum of the downloaded tarball before extracting.
+
+### Mint
+
+```bash
+mint install tornikegomareli/tca-graph
+```
+
+The viewer is bundled as an SPM resource, so `mint install` produces a self-contained binary — no separate npm step.
+
+### Manual tarball
+
+Releases ship a `tca-graph-<version>-macos-arm64.tar.gz` next to a matching `.sha256` checksum on every tag. Download from the [releases page](https://github.com/tornikegomareli/tca-graph/releases/latest), verify, extract, and put `bin/tca-graph` on your PATH (keep the adjacent `.bundle` directory next to it).
+
+### From source
+
+Requires Swift 5.10+ and Node 18+.
 
 ```bash
 git clone https://github.com/tornikegomareli/tca-graph.git
 cd tca-graph
-(cd viewer && npm install && npm run build)
+(cd viewer && npm install && npm run build)   # populates Sources/TCAGraphCLI/Resources/Viewer
 swift build -c release
 
-# Add the binary to your PATH or run it directly.
+# Run it directly, or symlink onto your PATH.
 ./.build/release/tca-graph serve ~/path/to/your/TCAProject
 ```
 
