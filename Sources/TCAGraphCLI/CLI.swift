@@ -181,7 +181,7 @@ struct CLI {
 
     let iso = ISO8601DateFormatter()
     let graph = Graph(
-      generator: GeneratorInfo(name: "tca-graph", version: "0.5.1"),
+      generator: GeneratorInfo(name: "tca-graph", version: "0.5.2"),
       generatedAt: iso.string(from: Date()),
       source: Source(
         rootPath: rootURL.path,
@@ -219,7 +219,12 @@ struct CLI {
     // install location, not next to a Homebrew-style symlink (Homebrew links
     // `bin/tca-graph` to `../Cellar/.../bin/tca-graph`; the resource bundle lives
     // alongside the real binary, not the symlink).
-    let argvBinURL = URL(fileURLWithPath: CommandLine.arguments[0])
+    //
+    // `Bundle.main.executablePath` is OS-resolved and absolute even when invoked by
+    // bare name through PATH — `CommandLine.arguments[0]` alone might be just "tca-graph"
+    // and `resolvingSymlinksInPath` can't resolve a name into a real path.
+    let executablePath = Bundle.main.executablePath ?? CommandLine.arguments[0]
+    let argvBinURL = URL(fileURLWithPath: executablePath)
     let realBinURL = argvBinURL.resolvingSymlinksInPath()
     let realBinDir = realBinURL.deletingLastPathComponent()
     let argvBinDir = argvBinURL.deletingLastPathComponent()
